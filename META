@@ -1,0 +1,6 @@
+name="imagelib"
+version="0.1"
+description="A full OCaml library for reading / writing images"
+requires="camlzip,bigarray"
+archive(byte)="imagelib.cma"
+archive(native)="imagelib.cmxa"
