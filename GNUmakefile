@@ -1,6 +1,7 @@
 OCAMLBUILD := ocamlbuild
 FLAGS := -cflags -w,-3 -use-ocamlfind
-FILES := $(wildcard *.ml)
+IMPLFILES := $(wildcard *.ml)
+INTFFILES := $(wildcard *.ml)
 
 all: imagelib.cma imagelib.cmxa
 
@@ -35,10 +36,10 @@ endif
 _tags: depchecks GNUmakefile
 	@echo "true : package($(BIGARRAY)), package($(CAMLZIP))" > $@
 
-imagelib.cma:  $(FILES) GNUmakefile imagelib.mllib _tags
+imagelib.cma:  $(IMPLFILES) $(INTFFILES) GNUmakefile imagelib.mllib _tags
 	$(OCAMLBUILD) $(FLAGS) $@
 
-imagelib.cmxa: $(FILES) GNUmakefile imagelib.mllib _tags
+imagelib.cmxa: $(IMPLFILES) $(INTFFILES) GNUmakefile imagelib.mllib _tags
 	$(OCAMLBUILD) $(FLAGS) $@
 
 clean:
@@ -46,3 +47,17 @@ clean:
 
 distclean: clean
 	rm -f *~ _tags
+
+uninstall:
+	ocamlfind remove imagelib
+
+IMPL := $(addprefix _build/,$(IMPLFILES))
+INTF := $(addprefix _build/,$(INTFFILES))
+CMX  := $(IMPL:.ml=.cmx)
+CMO  := $(IMPL:.ml=.cmo)
+CMI  := $(IMPL:.ml=.cmi)
+OBJ  := $(IMPL:.ml=.o)
+LIB  := _build/imagelib.cma _build/imagelib.cmxa _build/imagelib.a META
+
+install: all uninstall
+	ocamlfind install imagelib $(CMX) $(CMO) $(CMI) $(OBJ) $(INTF) $(LIB)

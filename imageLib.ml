@@ -1,11 +1,18 @@
 open Filename
 open Image
 open ImageUtil
+
 open ImagePNG
 open ImagePPM
 open ImageXCF
 open ImageJPG
 open ImageGIF
+
+module PNG = ImagePNG
+module PPM = ImagePPM
+module XCF = ImageXCF
+module JPG = ImageJPG
+module GIF = ImageGIF
 
 let convert fn fn' =
   let cmd = Printf.sprintf "convert %s %s" fn fn' in
