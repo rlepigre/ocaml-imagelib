@@ -56,5 +56,5 @@ module ReadGIF : ReadImage = struct
     hdr.image_size
 
   let openfile fn =
-    raise (Not_yet_implemented "openfile") (* TODO  *)
+    raise (Not_yet_implemented "ImageGIF.openfile") (* TODO  *)
 end

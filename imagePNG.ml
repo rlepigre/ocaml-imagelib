@@ -125,7 +125,7 @@ module ReadPNG : ReadImage = struct
     if String.sub hdr 1 3 = "PNG" then
       (if hdr <> png_signature then
         raise (Corrupted_image "Corrupted header..."))
-    else raise Wrong_image_type
+    else raise (Corrupted_image "Invalid PNG header...")
   
   (* Read one PNG chunck, and check the CRC.
    * Arguments:

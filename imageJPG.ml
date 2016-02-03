@@ -66,5 +66,5 @@ module ReadJPG : ReadImage = struct
     width, height
 
   let openfile fn =
-    raise (Not_yet_implemented "openfile") (* TODO  *)
+    raise (Not_yet_implemented "ImageJPG.openfile") (* TODO  *)
 end

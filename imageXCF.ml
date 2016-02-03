@@ -53,5 +53,5 @@ module ReadXCF : ReadImage = struct
     hdr.image_size
 
   let openfile fn =
-    raise (Not_yet_implemented "openfile") (* TODO  *)
+    raise (Not_yet_implemented "ImageXCF.openfile") (* TODO  *)
 end
