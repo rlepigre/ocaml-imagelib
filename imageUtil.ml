@@ -41,7 +41,6 @@ let lines_from_channel ich =
   in
   intfun ();
   List.rev !lines
-;;
 
 (*
  * Same as lines_from_channel but from a file.
@@ -50,14 +49,12 @@ let lines_from_file fn =
   let ich = open_in_bin fn in
   let ls = lines_from_channel ich in
   close_in ich; ls
-;;
 
 (*
  * Test whether a character is a digit.
  *)
 let is_digit c =
   List.mem c ['0'; '1'; '2'; '3'; '4'; '5'; '6'; '7'; '8'; '9']
-;;
 
 (*
  * Reads a list of positive integers written in decimal from a string.
@@ -89,7 +86,6 @@ let int_array_from_string str =
   done;
 
   Array.of_list (List.rev !words)
-;;
 
 (*
  * Read a string and returns the integer value of every character in an
@@ -98,7 +94,6 @@ let int_array_from_string str =
 let byte_array_from_string str =
   let len = String.length str in
   Array.init len (fun i -> int_of_char str.[i])
-;;
 
 (*
  * Computes the n-th power of 2.
@@ -106,7 +101,6 @@ let byte_array_from_string str =
 let rec pow_of_2 n =
   if n = 0 then 1
   else (2 * pow_of_2 (n - 1))
-;;
 
 (*
  * Same as Array.init but for dimension 2.
@@ -116,7 +110,6 @@ let rec pow_of_2 n =
  *)
 let init_matrix (w,h) f =
   Array.init w (fun x -> Array.init h (fun y -> f (x,y)))
-;;
 
 (*
  * Displays the hexadecimal representation of a string in the same way as in
@@ -136,7 +129,6 @@ let show_string_hex s =
   done;
   if !count mod 16 <> 0 then Printf.fprintf stderr "\n";
   Printf.fprintf stderr "%!"
-;;
 
 (*
  * Fetch bytes on an input channel and store them in a string.
@@ -148,7 +140,6 @@ let show_string_hex s =
 let get_bytes ich n =
   let str = String.create n in
   really_input ich str 0 n; str
-;;
 
 let print_byte v =
   for i = 7 downto 0 do
@@ -156,7 +147,6 @@ let print_byte v =
     Printf.fprintf stderr "%i" b
   done;
   Printf.fprintf stderr "%!"
-;;
 
 (*
  * Builds an integer which byte reprentation contains a given number of ones
@@ -179,7 +169,6 @@ let int_of_str4 s =
   int_of_char s.[1] lsl 16 +
   int_of_char s.[2] lsl 8 +
   int_of_char s.[3]
-;;
 
 (*
  * Converts a string of size 4 into an Int32.
@@ -209,4 +198,3 @@ let int_to_str4 i =
   s.[2] <- char_of_int ((i lsr 8) land mask);
   s.[3] <- char_of_int (i land mask);
   s
-;;

@@ -20,6 +20,9 @@ type ihdr_data = {
   interlace_method   : int
 }
 
+type pixel =
+  { r : int ; g : int ; b : int }
+
 (****************************************************************************
  * Zlib compression functions relying on ocaml-zip                          *
  ****************************************************************************)
@@ -859,61 +862,61 @@ module ReadPNG : ReadImage = struct
     | 0 -> 
       let image = create_grey ~max_val:(ones bd) w h in
       for y = 0 to h - 1 do
-	for x = 0 to w - 1 do
-	  write_grey_pixel image x y unfiltered_int.(y).(x)
-	done
+        for x = 0 to w - 1 do
+          write_grey image x y unfiltered_int.(y).(x)
+        done
       done;
       image
 
      | 2 ->
        let image = create_rgb ~max_val:(ones bd) w h in
        for y = 0 to h - 1 do
-	 for x = 0 to w - 1 do
+         for x = 0 to w - 1 do
            let r = unfiltered_int.(y).(3 * x) in
            let g = unfiltered_int.(y).(3 * x + 1) in
            let b = unfiltered_int.(y).(3 * x + 2) in
-	   write_rgb_pixel image x y r g b
-	 done
+           write_rgb image x y r g b
+         done
        done;
        image
 
      | 3 ->
        let image = create_rgb ~max_val:255 w h in
        for y = 0 to h - 1 do
-	 for x = 0 to w - 1 do
+         for x = 0 to w - 1 do
            let index = unfiltered_int.(y).(x) in
            let index = (* FIXME *)
              if index >= Array.length !palette
              then (Printf.fprintf stderr "Palette index too big...\n%!"; 0)
              else index 
            in
-	   let p = !palette.(index) in
-           write_rgb_pixel image x y p.r p.g p.b
-	 done
+           let p = !palette.(index) in
+           write_rgb image x y p.r p.g p.b
+         done
        done;
        image
 
      | 4 ->
        let image = create_grey ~alpha:true ~max_val:(ones bd) w h in
        for y = 0 to h - 1 do
-	 for x = 0 to w - 1 do
-	   write_greya_pixel image x y 
-	     unfiltered_int.(y).(2 * x)
-	     unfiltered_int.(y).(2 * x + 1);
-	 done
+         for x = 0 to w - 1 do
+           write_greya image x y 
+             unfiltered_int.(y).(2 * x)
+             unfiltered_int.(y).(2 * x + 1);
+         done
        done;
        image
 
      | 6 ->
        let image = create_rgb ~alpha:true ~max_val:(ones bd) w h in
        for y = 0 to h - 1 do
-	 for x = 0 to w - 1 do
+         for x = 0 to w - 1 do
            let r = unfiltered_int.(y).(4 * x) in
            let g = unfiltered_int.(y).(4 * x + 1) in
            let b = unfiltered_int.(y).(4 * x + 2) in
            let a = unfiltered_int.(y).(4 * x + 3) in
-	   write_rgba_pixel image x y r g b a
-	 done
+           write_rgba image x y r g b a
+         done
        done;
        image
 
@@ -965,11 +968,12 @@ let write_png fn img =
     in find_bd 1
   in
 
-  let ct = match img.pixels, img.alpha with
-            | GreyL _, None   -> 0
-            | GreyL _, Some _ -> 4
-            | RGB _,   None   -> 2
-            | RGB _,   Some _ -> 6
+  let ct =
+    match img.pixels with
+    | Grey  _ -> 0
+    | GreyA _ -> 4
+    | RGB _   -> 2
+    | RGBA _  -> 6
   in
 
   let w = img.width and h = img.height in
@@ -988,8 +992,8 @@ let write_png fn img =
   let buf = Buffer.create 4096 in
   let byte0 () = Buffer.add_char buf (char_of_int 0) in
   let add_byte i = Buffer.add_char buf (char_of_int i) in
-  (match img.pixels, img.alpha, bd with
-    | GreyL _, None     , 1  ->
+  (match img.pixels, bd with
+    | Grey _  , 1  ->
       let byte = ref 0 in
       let numb = ref 0 in
       let add_bit i =
@@ -1013,11 +1017,11 @@ let write_png fn img =
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_grey_pixel img x y (fun ~g -> add_bit g);
+          read_grey img x y (fun g -> add_bit g);
         done
       done;
       if !numb <> 0 then add_byte !byte
-    | GreyL _, None     , 2  ->
+    | Grey _  , 2  ->
       let byte = ref 0 in
       let numb = ref 0 in
       let add_quarter_byte i =
@@ -1037,11 +1041,11 @@ let write_png fn img =
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_grey_pixel img x y (fun ~g -> add_quarter_byte g)
+          read_grey img x y (fun g -> add_quarter_byte g)
         done
       done;
       if !numb <> 0 then add_byte !byte
-    | GreyL _, None     , 4  ->
+    | Grey _  , 4  ->
       let byte = ref 0 in
       let numb = ref 0 in
       let add_half_byte i =
@@ -1059,65 +1063,65 @@ let write_png fn img =
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_grey_pixel img x y (fun ~g -> add_half_byte g)
+          read_grey img x y (fun g -> add_half_byte g)
         done
       done;
       if !numb <> 0 then add_byte !byte
-    | GreyL _, None     , 8  ->
+    | Grey _  , 8  ->
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_grey_pixel img x y (fun ~g -> add_byte g)
+          read_grey img x y (fun g -> add_byte g)
         done
       done
-    | GreyL _, None     , 16 ->
+    | Grey _  , 16 ->
       let mask = ones 8 in
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-	  read_grey_pixel img x y (fun ~g -> 
+          read_grey img x y (fun g -> 
             add_byte (g lsr 8);
             add_byte (g land mask));
         done
       done
-    | GreyL _, Some als , 8  ->
+    | GreyA _ , 8  ->
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
- 	  read_greya_pixel img x y (fun ~g ~a -> 
+           read_greya img x y (fun g a -> 
             add_byte g;
             add_byte a);
         done
       done
-    | GreyL _, Some als , 16 ->
+    | GreyA _ , 16 ->
       let mask = ones 8 in
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-	  read_greya_pixel img x y (fun ~g ~a -> 
+          read_greya img x y (fun g a -> 
             add_byte (g lsr 8);
             add_byte (g land mask);
             add_byte (a lsr 8);
             add_byte (a land mask));
         done
       done
-    | RGB _,   None     , 8  ->
+    | RGB _   , 8  ->
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-	  read_rgb_pixel img x y (fun ~r ~g ~b -> 
+          read_rgb img x y (fun r g b -> 
             add_byte r;
             add_byte g;
             add_byte b);
         done
       done
-    | RGB _,   None     , 16 ->
+    | RGB _   , 16 ->
       let mask = ones 8 in
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_rgb_pixel img x y (fun ~r ~g ~b -> 
-	    add_byte (r lsr 8);
+          read_rgb img x y (fun r g b -> 
+            add_byte (r lsr 8);
             add_byte (r land mask);
             add_byte (g lsr 8);
             add_byte (g land mask);
@@ -1125,24 +1129,24 @@ let write_png fn img =
             add_byte (b land mask));
         done
       done
-    | RGB _,   Some als , 8  ->
+    | RGBA _  , 8  ->
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_rgba_pixel img x y (fun ~r ~g ~b ~a ->
-	    add_byte r;
+          read_rgba img x y (fun r g b a ->
+            add_byte r;
             add_byte g;
             add_byte b;
             add_byte a);
         done
       done
-    | RGB _,   Some als , 16 ->
+    | RGBA _  , 16 ->
       let mask = ones 8 in
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_rgba_pixel img x y (fun ~r ~g ~b ~a ->
-	    add_byte (r lsr 8);
+          read_rgba img x y (fun r g b a ->
+            add_byte (r lsr 8);
             add_byte (r land mask);
             add_byte (g lsr 8);
             add_byte (g land mask);

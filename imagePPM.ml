@@ -32,9 +32,9 @@ module ReadPPM : ReadImage = struct
     in
     let rec pass_comments () =
       (try
-	 Scanf.fscanf content "#%[^\n\r]%[\t\n\r]" (fun s1 s2 ->
-	   count s1; count s2);
-	 (fun () -> pass_comments ())
+         Scanf.fscanf content "#%[^\n\r]%[\t\n\r]" (fun s1 s2 ->
+           count s1; count s2);
+         (fun () -> pass_comments ())
      with _ -> (fun () -> ())) ()
     in
     Scanf.fscanf content "%s%[\t\n ]" (fun mn s -> magic := mn; 
@@ -79,83 +79,83 @@ module ReadPPM : ReadImage = struct
       let magic,w,h,max_val,hline_num = read_header content in
       seek_in content 0;
       for i = 1 to hline_num do
-	ignore (input_line content)
+        ignore (input_line content)
       done;
  
       match magic with
       | "P1" | "P2" ->
        let image = create_grey ~max_val:max_val w h in
        for y = 0 to h - 1 do
-	 for x = 0 to w - 1 do
-	   Scanf.fscanf content "%d%[\t\n ]" (fun v _ ->
-	     write_grey_pixel image x y v)
-	 done
+         for x = 0 to w - 1 do
+           Scanf.fscanf content "%d%[\t\n ]" (fun v _ ->
+             write_grey image x y v)
+         done
        done;
        image
 
      | "P3" ->
        let image = create_rgb ~max_val:max_val w h in
        for y = 0 to h - 1 do
-	 for x = 0 to w - 1 do
-	   Scanf.fscanf content "%d%[\t\n ]%d%[\t\n ]%d%[\t\n ]"
-	     (fun r _ g _ b _ ->
-	       write_rgb_pixel image x y r g b)
-	 done
+         for x = 0 to w - 1 do
+           Scanf.fscanf content "%d%[\t\n ]%d%[\t\n ]%d%[\t\n ]"
+             (fun r _ g _ b _ ->
+               write_rgb image x y r g b)
+         done
        done;
        image
 
      | "P4" ->
        let image = create_grey ~max_val:1 w h in
        for y = 0 to h - 1 do
-	 let x = ref 0 in
-	 let byte = ref 0 in
-	 while !x < w do
-	   if !x mod 8 = 0 then
-	     byte := int_of_char (input_char content);
-	   let byte_pos = !x mod 8 in
-	   let v = (!byte lsr (7 - byte_pos)) land 1 in
-	   write_grey_pixel image !x y v;
-	   incr x
-	 done
+         let x = ref 0 in
+         let byte = ref 0 in
+         while !x < w do
+           if !x mod 8 = 0 then
+             byte := int_of_char (input_char content);
+           let byte_pos = !x mod 8 in
+           let v = (!byte lsr (7 - byte_pos)) land 1 in
+           write_grey image !x y v;
+           incr x
+         done
        done;
        image  
 
      | "P5" ->
        let image = create_grey ~max_val:max_val w h in
        for y = 0 to h - 1 do
-	 for x = 0 to w - 1 do
-	   if max_val <= 255 then (
-	     let b0 = int_of_char (input_char content) in
-	     write_grey_pixel image x y b0)
-	   else (
-	     let b0 = int_of_char (input_char content) in
-	     let b1 = int_of_char (input_char content) in
-	     write_grey_pixel image x y ((b0 lsl 8) + b1))
-	 done
+         for x = 0 to w - 1 do
+           if max_val <= 255 then (
+             let b0 = int_of_char (input_char content) in
+             write_grey image x y b0)
+           else (
+             let b0 = int_of_char (input_char content) in
+             let b1 = int_of_char (input_char content) in
+             write_grey image x y ((b0 lsl 8) + b1))
+         done
        done;
        image
 
      | "P6" ->
        let image = create_rgb ~max_val:max_val w h in
        for y = 0 to h - 1 do
-	 for x = 0 to w - 1 do
-	   if max_val <= 255 then (
-	     let r = int_of_char (input_char content) in
-	     let g = int_of_char (input_char content) in
-	     let b = int_of_char (input_char content) in
-	     write_rgb_pixel image x y r g b)
-	   else (
-	     let r1 = int_of_char (input_char content) in
-	     let r0 = int_of_char (input_char content) in
-	     let g1 = int_of_char (input_char content) in
-	     let g0 = int_of_char (input_char content) in
-	     let b1 = int_of_char (input_char content) in
-	     let b0 = int_of_char (input_char content) in
+         for x = 0 to w - 1 do
+           if max_val <= 255 then (
+             let r = int_of_char (input_char content) in
+             let g = int_of_char (input_char content) in
+             let b = int_of_char (input_char content) in
+             write_rgb image x y r g b)
+           else (
+             let r1 = int_of_char (input_char content) in
+             let r0 = int_of_char (input_char content) in
+             let g1 = int_of_char (input_char content) in
+             let g0 = int_of_char (input_char content) in
+             let b1 = int_of_char (input_char content) in
+             let b0 = int_of_char (input_char content) in
              let r = (r1 lsl 8) + r0 in
              let g = (g1 lsl 8) + g0 in
              let b = (b1 lsl 8) + b0 in
-	     write_rgb_pixel image x y r g b)
-	 done
+             write_rgb image x y r g b)
+         done
        done;
        image
 
@@ -185,15 +185,15 @@ let write_ppm fn img mode =
   let w = img.width and h = img.height in
 
   (match img.pixels, mode, img.max_val with
-   | RGB _,    Binary, mv ->
+   | (RGB _ | RGBA _)  , Binary, mv ->
      Printf.fprintf och "P6\n%i %i %i\n" w h mv;
      for y = 0 to h - 1 do
        for x = 0 to w - 1 do
-	 read_rgb_pixel img x y (fun ~r ~g ~b ->
+         read_rgb img x y (fun r g b ->
            if mv < 256
            then begin
              Printf.fprintf och "%c%c%c"
-	       (char_of_int r) (char_of_int g) (char_of_int b)
+               (char_of_int r) (char_of_int g) (char_of_int b)
            end else begin
              let r0 = char_of_int (r mod 256) in
              let r1 = char_of_int (r lsr 8) in
@@ -205,15 +205,15 @@ let write_ppm fn img mode =
            end)
        done
      done
-   | RGB _,    ASCII,  mv ->
+   | (RGB _ | RGBA _)  , ASCII,  mv ->
      Printf.fprintf och "P3\n%i %i %i\n" w h mv;
      for y = 0 to h - 1 do
        for x = 0 to w - 1 do
- 	 read_rgb_pixel img x y (fun ~r ~g ~b ->
+          read_rgb img x y (fun r g b ->
          Printf.fprintf och "%i %i %i\n" r g b)
        done;
      done
-   | GreyL _, Binary, 1  ->
+   | (Grey _ | GreyA _), Binary, 1  ->
      Printf.fprintf och "P4\n%i %i\n" w h;
      for y = 0 to h - 1 do
        let byte = ref 0 in
@@ -235,29 +235,29 @@ let write_ppm fn img mode =
        in
 
        for x = 0 to w - 1 do
-	 read_grey_pixel img x y (fun ~g ->
+         read_grey img x y (fun g ->
          output_bit g)
        done;
 
        flush_byte ()
      done
 
-   | GreyL greymap, ASCII,  1  ->
+   | (Grey _ | GreyA _), ASCII,  1  ->
      let header = Printf.sprintf "P1\n%i %i\n" w h in
      output_string och header;
      for y = 0 to h - 1 do
        for x = 0 to w - 1 do
-         read_grey_pixel img x y (fun ~g ->
+         read_grey img x y (fun g ->
          Printf.fprintf och "%i\n" g)
        done;
      done
 
-   | GreyL greymap, Binary, mv ->
+   | (Grey _ | GreyA _), Binary, mv ->
      let header = Printf.sprintf "P5\n%i %i %i\n" w h mv in
      output_string och header;
      for y = 0 to h - 1 do
        for x = 0 to w - 1 do
-        read_grey_pixel img x y (fun ~g ->
+        read_grey img x y (fun g ->
           if mv < 256
           then Printf.fprintf och "%c" (char_of_int g)
           else begin
@@ -268,12 +268,12 @@ let write_ppm fn img mode =
        done;
      done
 
-   | GreyL greymap, ASCII,  mv ->
+   | (Grey _ | GreyA _), ASCII,  mv ->
      let header = Printf.sprintf "P2\n%i %i %i\n" w h mv in
      output_string och header;
      for y = 0 to h - 1 do
        for x = 0 to w - 1 do
-         read_grey_pixel img x y (fun ~g ->
+         read_grey img x y (fun g ->
          Printf.fprintf och "%i\n" g)
        done;
      done

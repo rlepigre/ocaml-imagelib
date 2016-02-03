@@ -2,77 +2,43 @@
  * Data types used by the image input / output fonctions                    *
  ****************************************************************************)
 
-open Bigarray
+module Pixmap =
+  struct
+    open Bigarray
 
-exception Not_yet_implemented of string
-exception Wrong_image_type
+    type pixmap8  = (int, int8_unsigned_elt , c_layout) Array2.t
+    type pixmap16 = (int, int16_unsigned_elt, c_layout) Array2.t
 
-type component = int
+    type t =
+      | Pix8  of pixmap8
+      | Pix16 of pixmap16
 
-type pixmap = 
-(* 8 bits per componants *)
-| Bits8 of (int, int8_unsigned_elt, c_layout) Array2.t
-(* 16 bits per componants *)
-| Bits16 of (int, int16_unsigned_elt, c_layout) Array2.t
+    let create8  : int -> int -> t = fun w h ->
+      Pix8 (Array2.create int8_unsigned c_layout w h)
 
-type cpixmap = RGB of pixmap * pixmap * pixmap (*r, g, b*) 
-            | GreyL of pixmap
+    let create16 : int -> int -> t = fun w h ->
+      Pix16 (Array2.create int16_unsigned c_layout w h)
 
-type image = {
-  width   : int;
-  height  : int;
-  max_val : component;
-  pixels  : cpixmap ;
-  alpha   : pixmap option ;
-}
+    let get : t -> int -> int -> int = function
+      | Pix8  p -> Array2.get p
+      | Pix16 p -> Array2.get p
 
-type pixel = { r : int; g : int; b : int }
+    let set : t -> int -> int -> int -> unit = function
+      | Pix8  p -> Array2.set p
+      | Pix16 p -> Array2.set p
+  end
 
-let create_pixmap8 width height =
-  Bits8(Array2.create int8_unsigned c_layout width height)
+type pixmap =
+  | Grey  of Pixmap.t
+  | GreyA of Pixmap.t * Pixmap.t
+  | RGB   of Pixmap.t * Pixmap.t * Pixmap.t
+  | RGBA  of Pixmap.t * Pixmap.t * Pixmap.t * Pixmap.t
 
-let create_pixmap16 width height =
-  Bits16(Array2.create int16_unsigned c_layout width height)
-
-let create_rgb 
-    ?(alpha=false)
-    ?(max_val=255)
-    width
-    height =
-  assert (max_val <= 65535);
-  let create = if max_val <= 255 then create_pixmap8 
-    else create_pixmap16
-  in
-{
-  width;
-  height;
-  max_val;
-  pixels = RGB(create width height,
-	       create width height,
-	       create width height);
-  alpha = match alpha with
-    false -> None
-  | true -> Some(create width height)
-}
-
-let create_grey 
-    ?(alpha=false)
-    ?(max_val=255)
-    width
-    height =
-  assert (max_val <= 65535);
-  let create = if max_val <= 255 then create_pixmap8 
-    else create_pixmap16
-  in
-{
-  width;
-  height;
-  max_val;
-  pixels = GreyL(create width height);
-  alpha = match alpha with
-    false -> None
-  | true -> Some(create width height)
-}
+type image =
+  { width   : int
+  ; height  : int
+  ; max_val : int
+  ; pixels  : pixmap }
 
 module type ReadImage =
   sig
@@ -82,115 +48,190 @@ module type ReadImage =
     val openfile : string -> image
   end
 
-let read_pixmap p i j = match p with
-| Bits8 p -> Array2.get p i j 
-| Bits16 p -> Array2.get p i j 
+exception Not_yet_implemented of string
+exception Wrong_image_type
 
-let write_pixmap p i j v = match p with
-| Bits8 p -> Array2.set p i j v
-| Bits16 p -> Array2.set p i j v
-
-let read_rgba_pixel i x y fn =
-  let r,g, b = match i.pixels with
-      RGB(r,g,b) ->
-	let r = read_pixmap r x y in
-	let g = read_pixmap g x y in
-	let b = read_pixmap b x y in
-	r,g,b
-    | GreyL(g) ->
-      	let g = read_pixmap g x y in
-	g,g,g
+let create_rgb ?(alpha=false) ?(max_val=255) width height =
+  assert (1 <= max_val && max_val <= 65535);
+  let create = if max_val <= 255 then Pixmap.create8 else Pixmap.create16 in
+  let pixels =
+    let r = create width height in
+    let g = create width height in
+    let b = create width height in
+    if alpha then
+      let a = create width height in
+      RGBA (r,g,b,a)
+    else RGB (r,g,b)
   in
-  let a = match i.alpha with
-    | None -> i.max_val
-    | Some p -> read_pixmap p x y
-  in
-  fn  ~r ~g ~b ~a
+  { width ; height ; max_val ; pixels }
 
-let read_rgb_pixel i x y fn =
-  let r,g, b = match i.pixels with
-      RGB(r,g,b) ->
-	let r = read_pixmap r x y in
-	let g = read_pixmap g x y in
-	let b = read_pixmap b x y in
-	r,g,b
-    | GreyL(g) ->
-      	let g = read_pixmap g x y in
-	g,g,g
+let create_grey ?(alpha=false) ?(max_val=255) width height =
+  assert (1 <= max_val && max_val <= 65535);
+  let create = if max_val <= 255 then Pixmap.create8 else Pixmap.create16 in
+  let pixels =
+    let g = create width height in
+    if alpha then
+      let a = create width height in
+      GreyA (g,a)
+    else Grey g
   in
-  fn ~r ~g ~b
+  { width ; height ; max_val ; pixels }
 
-let read_greya_pixel i x y fn =
-  let g = match i.pixels with
-      RGB(r,g,b) ->
-	let r = read_pixmap r x y in
-	let g = read_pixmap g x y in
-	let b = read_pixmap b x y in
-	(r+g+b) / 3
-    | GreyL(g) ->
-      	let g = read_pixmap g x y in
-	g
-  in
-  let a = match i.alpha with
-    | None -> i.max_val
-    | Some p -> read_pixmap p x y
-  in
-  fn ~g ~a
-
-let read_grey_pixel i x y fn =
-  let g = match i.pixels with
-      RGB(r,g,b) ->
-	let r = read_pixmap r x y in
-	let g = read_pixmap g x y in
-	let b = read_pixmap b x y in
-	(r+g+b) / 3
-    | GreyL(g) ->
-      	let g = read_pixmap g x y in
-	g
-  in
-  fn ~g
-
-let write_rgba_pixel i x y r g b a =
-  (match i.pixels with
-      RGB(pr,pg,pb) ->
-	write_pixmap pr x y r;
-	write_pixmap pg x y g;
-	write_pixmap pb x y b;
-    | GreyL(pg) ->
-      let g = (r + g + b) / 3 in
-      write_pixmap pg x y g);
-  match i.alpha with
-  | None -> ()
-  | Some p -> write_pixmap p x y a
-
-let write_rgb_pixel i x y r g b =
+let read_rgba i x y fn =
   match i.pixels with
-      RGB(pr,pg,pb) ->
-	write_pixmap pr x y r;
-	write_pixmap pg x y g;
-	write_pixmap pb x y b;
-    | GreyL(pg) ->
-      let g = (r + g + b) / 3 in
-      write_pixmap pg x y g
+  | RGB(r,g,b)    ->
+      let r = Pixmap.get r x y in
+      let g = Pixmap.get g x y in
+      let b = Pixmap.get b x y in
+      let a = i.max_val in
+      fn r g b a
+  | RGBA(r,g,b,a) ->
+      let r = Pixmap.get r x y in
+      let g = Pixmap.get g x y in
+      let b = Pixmap.get b x y in
+      let a = Pixmap.get a x y in
+      fn r g b a
+  | Grey(g)       ->
+      let gr = Pixmap.get g x y in
+      let a = i.max_val in
+      fn gr gr gr a
+  | GreyA(g,a)    ->
+      let gr = Pixmap.get g x y in
+      let a = Pixmap.get a x y in
+      fn gr gr gr a
 
-let write_greya_pixel i x y g a =
-  (match i.pixels with
-  | RGB(pr,pg,pb) ->
-    write_pixmap pr x y g;
-    write_pixmap pg x y g;
-    write_pixmap pb x y g;
-  | GreyL(pg) ->
-    write_pixmap pg x y g);
-  match i.alpha with
-  | None -> ()
-  | Some p -> write_pixmap p x y a
-    
-let write_grey_pixel i x y g =
+let read_rgb i x y fn =
   match i.pixels with
-  | RGB(pr,pg,pb) ->
-    write_pixmap pr x y g;
-    write_pixmap pg x y g;
-    write_pixmap pb x y g;
-  | GreyL(pg) ->
-    write_pixmap pg x y g
+  | RGB(r,g,b)
+  | RGBA(r,g,b,_) ->
+      let r = Pixmap.get r x y in
+      let g = Pixmap.get g x y in
+      let b = Pixmap.get b x y in
+      fn r g b
+  | Grey(g)
+  | GreyA(g,_)    ->
+      let gr = Pixmap.get g x y in
+      fn gr gr gr
 
+let read_greya i x y fn =
+  match i.pixels with
+  | RGB(r,g,b)    ->
+      let r = Pixmap.get r x y in
+      let g = Pixmap.get g x y in
+      let b = Pixmap.get b x y in
+      let g = (r + g + b) / 3 in
+      let a = i.max_val in
+      fn g a
+  | RGBA(r,g,b,a) ->
+      let r = Pixmap.get r x y in
+      let g = Pixmap.get g x y in
+      let b = Pixmap.get b x y in
+      let g = (r + g + b) / 3 in
+      let a = Pixmap.get a x y in
+      fn g a
+  | Grey(g)       ->
+      let g = Pixmap.get g x y in
+      let a = i.max_val in
+      fn g a
+  | GreyA(g,a)    ->
+      let g = Pixmap.get g x y in
+      let a = Pixmap.get a x y in
+      fn g a
+
+let read_grey i x y fn =
+  match i.pixels with
+  | RGB(r,g,b)
+  | RGBA(r,g,b,_) ->
+      let r = Pixmap.get r x y in
+      let g = Pixmap.get g x y in
+      let b = Pixmap.get b x y in
+      let g = (r + g + b) / 3 in
+      fn g
+  | Grey(g)
+  | GreyA(g,_)    ->
+      let g = Pixmap.get g x y in
+      fn g
+
+(* Writing a pixel value to an image. *)
+let write_rgba i x y r g b a =
+  match i.pixels with
+  | RGB(rr,gg,bb)     ->
+      begin
+        Pixmap.set rr x y r;
+        Pixmap.set gg x y g;
+        Pixmap.set bb x y b
+      end
+  | RGBA(rr,gg,bb,aa) ->
+      begin
+        Pixmap.set rr x y r;
+        Pixmap.set gg x y g;
+        Pixmap.set bb x y b;
+        Pixmap.set aa x y a
+      end
+  | Grey(gg)          ->
+      begin
+        let g = (r + g + b) / 3 in
+        Pixmap.set gg x y g
+      end
+  | GreyA(gg,aa)      ->
+      begin
+        let g = (r + g + b) / 3 in
+        Pixmap.set gg x y g;
+        Pixmap.set aa x y a
+      end
+
+let write_rgb i x y r g b =
+  match i.pixels with
+  | RGB(rr,gg,bb)
+  | RGBA(rr,gg,bb,_) ->
+      begin
+        Pixmap.set rr x y r;
+        Pixmap.set gg x y g;
+        Pixmap.set bb x y b
+      end
+  | Grey(gg)
+  | GreyA(gg,_)      ->
+      begin
+        let g = (r + g + b) / 3 in
+        Pixmap.set gg x y g
+      end
+
+let write_greya i x y g a =
+  match i.pixels with
+  | RGB(rr,gg,bb)     ->
+      begin
+        Pixmap.set rr x y g;
+        Pixmap.set gg x y g;
+        Pixmap.set bb x y g
+      end
+  | RGBA(rr,gg,bb,aa) ->
+      begin
+        Pixmap.set rr x y g;
+        Pixmap.set gg x y g;
+        Pixmap.set bb x y g;
+        Pixmap.set aa x y a
+      end
+  | Grey(gg)          ->
+      begin
+        Pixmap.set gg x y g
+      end
+  | GreyA(gg,aa)      ->
+      begin
+        Pixmap.set gg x y g;
+        Pixmap.set aa x y a
+      end
+ 
+let write_grey i x y g =
+  match i.pixels with
+  | RGB(rr,gg,bb)
+  | RGBA(rr,gg,bb,_) ->
+      begin
+        Pixmap.set rr x y g;
+        Pixmap.set gg x y g;
+        Pixmap.set bb x y g
+      end
+  | Grey(gg)
+  | GreyA(gg,_)      ->
+      begin
+        Pixmap.set gg x y g
+      end
