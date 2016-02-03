@@ -14,18 +14,16 @@ type gif_header_data = {
 }
 
 module ReadGIF : ReadImage = struct
-  exception Corrupted_Image of string
-
   let extensions = ["gif"]
 
   (* Read signature and header *)
   let read_header ich =
     let magic = get_bytes ich 3 in
     if magic <> "GIF" then
-      raise (Corrupted_Image "GIF signature expected...");
+      raise (Corrupted_image "GIF signature expected...");
     let version = get_bytes ich 3 in
     if version <> "87a" && version <> "89a" then
-      raise (Corrupted_Image "Version of GIF not supported...");
+      raise (Corrupted_image "Version of GIF not supported...");
     let width  = get_bytes ich 2 in
     let height = get_bytes ich 2 in
     let packed = input_byte ich in

@@ -4,8 +4,6 @@ open Image
 open Bigarray
 
 module ReadPPM : ReadImage = struct
-  exception Corrupted_Image of string
-  
   (*
    * The list of standard extenisons for the PPM format.
    *   - ppm : portable pixmap format
@@ -42,7 +40,7 @@ module ReadPPM : ReadImage = struct
     pass_comments ();
     
     if not (List.mem !magic ["P1"; "P2"; "P3"; "P4"; "P5"; "P6"]) then
-      raise (Corrupted_Image "Invalid magic number...");
+      raise (Corrupted_image "Invalid magic number...");
     
     if List.mem !magic ["P1"; "P4"] then (
       Scanf.fscanf content "%u%[\t\n ]" (fun w s -> width := w; count s);
@@ -71,7 +69,7 @@ module ReadPPM : ReadImage = struct
    * Read a PPM format image file.
    * Arguments:
    *   - fn : the path to the file.
-   * Raise the exception Corrupted_Image if the file is not valid.
+   * Raise the exception Corrupted_image if the file is not valid.
    *)
   let openfile fn = 
     try
@@ -160,9 +158,9 @@ module ReadPPM : ReadImage = struct
        image
 
      | _ ->
-       raise (Corrupted_Image "Invalid magic number...");
+       raise (Corrupted_image "Invalid magic number...");
     with End_of_file ->
-      raise (Corrupted_Image "Truncated file");
+      raise (Corrupted_image "Truncated file");
 
 end
 

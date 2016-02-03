@@ -1,7 +1,3 @@
-(****************************************************************************
- * Data types used by the image input / output fonctions                    *
- ****************************************************************************)
-
 module Pixmap =
   struct
     open Bigarray
@@ -42,12 +38,12 @@ type image =
 
 module type ReadImage =
   sig
-    exception Corrupted_Image of string
     val extensions : string list
     val size : string -> int * int
     val openfile : string -> image
   end
 
+exception Corrupted_image of string
 exception Not_yet_implemented of string
 exception Wrong_image_type
 
@@ -152,7 +148,6 @@ let read_grey i x y fn =
       let g = Pixmap.get g x y in
       fn g
 
-(* Writing a pixel value to an image. *)
 let write_rgba i x y r g b a =
   match i.pixels with
   | RGB(rr,gg,bb)     ->

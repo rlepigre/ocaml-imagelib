@@ -11,8 +11,6 @@ type xcf_header_data = {
 }
 
 module ReadXCF : ReadImage = struct
-  exception Corrupted_Image of string
-
   let extensions = ["xcf"]
 
   let version_num s =
@@ -20,7 +18,7 @@ module ReadXCF : ReadImage = struct
     | "file\000" -> 0
     | "v001\000" -> 1
     | "v002\000" -> 2
-    | _          -> raise (Corrupted_Image "Unknown version number...")
+    | _          -> raise (Corrupted_image "Unknown version number...")
 
   let read_header ich =
     let magic     = get_bytes ich 9 in
@@ -29,12 +27,12 @@ module ReadXCF : ReadImage = struct
     let height    = get_bytes ich 4 in
     let base_type = get_bytes ich 4 in
     if magic <> xcf_signature then
-      raise (Corrupted_Image "Corrupted header...");
+      raise (Corrupted_image "Corrupted header...");
     let w  = int_of_str4 width in
     let h  = int_of_str4 height in
     let ct = int_of_str4 base_type in
     if ct < 0 || ct > 2 then
-      raise (Corrupted_Image "Unknown color type...");
+      raise (Corrupted_image "Unknown color type...");
     {
       version     = version_num version ;
       image_size  = w , h ;

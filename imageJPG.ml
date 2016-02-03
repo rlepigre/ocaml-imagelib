@@ -3,28 +3,26 @@ open ImageUtil
 open Image
 
 module ReadJPG : ReadImage = struct
-  exception Corrupted_Image of string
-
   let extensions = ["jpg"; "jpeg"; "jpe"; "jif"; "jfif"; "jfi"]
 
   let read_marker ich =
     let ff = input_byte ich in
     if ff <> 0xff then
-      raise (Corrupted_Image "Expected marker...");
+      raise (Corrupted_image "Expected marker...");
     let rec read_first_not_ff ich =
       let c = input_byte ich in
       if c = 0xff then read_first_not_ff ich else c
     in
     let c = read_first_not_ff ich in
     if c = 0 then
-      raise (Corrupted_Image "0xFF00 is not a valid marker...");
+      raise (Corrupted_image "0xFF00 is not a valid marker...");
     c
 
   let read_header_data ich =
     (* Read magic number (i.e. marker 0xffd8) *)
     let magic = read_marker ich in
     if magic <> 0xd8 then
-      raise (Corrupted_Image "First marker should be SOI...");
+      raise (Corrupted_image "First marker should be SOI...");
 
     (* Read other header sections *)
     let rec read_header_sections ich acc =
@@ -53,7 +51,7 @@ module ReadJPG : ReadImage = struct
 
     let rec find_SOF ls =
       match ls with
-      | []        -> raise (Corrupted_Image "No SOFn marker...");
+      | []        -> raise (Corrupted_image "No SOFn marker...");
       | (m,d)::bs -> if m >= 0xc0 && m <= 0xcf && m <> 0xc4 && m <> 0xcc
                      then (m - 0xc0, d)
                      else find_SOF bs

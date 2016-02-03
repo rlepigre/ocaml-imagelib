@@ -114,8 +114,6 @@ open PNG_CRC
  * Core PNG function                                                        *
  ****************************************************************************)
 module ReadPNG : ReadImage = struct
-  exception Corrupted_Image of string
-
   let extensions = ["png"]
 
   (* Checks for the PNG signature
@@ -126,7 +124,7 @@ module ReadPNG : ReadImage = struct
     let hdr = get_bytes ich 8 in
     if String.sub hdr 1 3 = "PNG" then
       (if hdr <> png_signature then
-        raise (Corrupted_Image "Corrupted header..."))
+        raise (Corrupted_image "Corrupted header..."))
     else raise Wrong_image_type
   
   (* Read one PNG chunck, and check the CRC.
@@ -137,14 +135,14 @@ module ReadPNG : ReadImage = struct
   let read_chunck ich =
     let length = int32_of_str4 (get_bytes ich 4) in
     if length > 2147483647l then
-      raise (Corrupted_Image "Size of chunck greater that 2^31 - 1...");
+      raise (Corrupted_image "Size of chunck greater that 2^31 - 1...");
     let length = Int32.to_int length in (* FIXME unsafe for large chunks *)
     let data = get_bytes ich (length + 4) in
     let str_crc = get_bytes ich 4 in
     let expected_crc = int32_of_str4 str_crc in
     let crc = png_crc data (length + 4) in
     if expected_crc <> crc then
-      raise (Corrupted_Image "CRC error...");
+      raise (Corrupted_image "CRC error...");
     { chunck_type = String.sub data 0 4 ;
       chunck_data = String.sub data 4 length }
 
@@ -171,28 +169,28 @@ module ReadPNG : ReadImage = struct
       let msg = Printf.sprintf
             "Unsupported combination of colour type %X with bit depth %X..."
             colour_type bit_depth in
-      raise (Corrupted_Image msg)
+      raise (Corrupted_image msg)
     end; 
     let compression_method = int_of_char s.[10] in
     if compression_method <> 0 then begin
       let msg = Printf.sprintf
             "Unsupported compression method %X (only code %X is standard)..."
             compression_method 0 in
-      raise (Corrupted_Image msg)
+      raise (Corrupted_image msg)
     end;
     let filter_method      = int_of_char s.[11] in
     if filter_method <> 0 then begin
       let msg = Printf.sprintf
             "Unsupported filter method %X (only code %X is standard)..."
             compression_method 0 in
-      raise (Corrupted_Image msg)
+      raise (Corrupted_image msg)
     end;
     let interlace_method   = int_of_char s.[12] in
     if interlace_method <> 0 && interlace_method <> 1 then begin
       let msg = Printf.sprintf
             "Unsupported interlace method %X (only %X and %X are standard)..."
             interlace_method 0 1 in
-      raise (Corrupted_Image msg)
+      raise (Corrupted_image msg)
     end;
     { image_size         = (image_width, image_height) ;
       bit_depth          = bit_depth ;
@@ -213,7 +211,7 @@ module ReadPNG : ReadImage = struct
     read_signature ich;
     let ihdr_chunck = read_chunck ich in
     if ihdr_chunck.chunck_type <> "IHDR" then
-      raise (Corrupted_Image "First chunck sould be of type IHDR...");
+      raise (Corrupted_image "First chunck sould be of type IHDR...");
     let ihdr = data_from_ihdr ihdr_chunck.chunck_data in
     close_in ich;
     ihdr.image_size
@@ -266,7 +264,7 @@ module ReadPNG : ReadImage = struct
          | 3 -> (filtx + ((recona + reconb) / 2)) mod 256
          | 4 -> (filtx + paeth_predictor recona reconb reconc) mod 256
          | _ -> let msg = Printf.sprintf "Unknown filter type (%i)..." ftype in
-                raise (Corrupted_Image msg)
+                raise (Corrupted_image msg)
       in
       String.set unfiltered x (char_of_int recon)
     done;
@@ -465,7 +463,7 @@ module ReadPNG : ReadImage = struct
                     "Chunck %s should not appear more than once..." ctype
         in
         close_in ich;
-        raise (Corrupted_Image msg)
+        raise (Corrupted_image msg)
       end
     in
   
@@ -476,7 +474,7 @@ module ReadPNG : ReadImage = struct
                     "Chunck %s should appear before chunck %s..." ctype ctype'
         in
         close_in ich;
-        raise (Corrupted_Image msg)
+        raise (Corrupted_image msg)
       end
     in
   
@@ -487,7 +485,7 @@ module ReadPNG : ReadImage = struct
                     "Chunck %s should appear after chunck %s..." ctype ctype'
         in
         close_in ich;
-        raise (Corrupted_Image msg)
+        raise (Corrupted_image msg)
       end
     in
   
@@ -498,7 +496,7 @@ module ReadPNG : ReadImage = struct
                     "Chunck %s can only be the first chunck..." ctype
         in
         close_in ich;
-        raise (Corrupted_Image msg)
+        raise (Corrupted_image msg)
       end
     in
   
@@ -509,7 +507,7 @@ module ReadPNG : ReadImage = struct
                     "Chunck %s cannot be the first chunck..." ctype
         in
         close_in ich;
-        raise (Corrupted_Image msg)
+        raise (Corrupted_image msg)
       end
     in
   
@@ -520,7 +518,7 @@ module ReadPNG : ReadImage = struct
                     "Chunck %s is not compatible with chunck %s..." ctype ctype'
         in
         close_in ich;
-        raise (Corrupted_Image msg)
+        raise (Corrupted_image msg)
       end
     in
   
@@ -541,7 +539,7 @@ module ReadPNG : ReadImage = struct
                     "Chunck %s cannot appear after chunck %s..." ctype ctype'
         in
         close_in ich;
-        raise (Corrupted_Image msg)
+        raise (Corrupted_image msg)
       end
     in
   
@@ -597,19 +595,19 @@ module ReadPNG : ReadImage = struct
                then begin
                  let msg = Printf.sprintf
                        "Chunck PLTE is forbiden for greyscale mode (%i)..." ct
-                 in raise (Corrupted_Image msg);
+                 in raise (Corrupted_image msg);
                end;
   
                let bytes_palette = String.length !curr_chunck.chunck_data in
                if bytes_palette mod 3 <> 0
-               then raise (Corrupted_Image "Invalid palette size...");
+               then raise (Corrupted_image "Invalid palette size...");
                let palette_length = bytes_palette / 3 in
                if palette_length > pow_of_2 !ihdr.bit_depth
                then begin
                  let msg = Printf.sprintf
                        "Maximum palette size is %i for bit depth %i.\n%!"
                        (pow_of_2 !ihdr.bit_depth) !ihdr.bit_depth
-                 in raise (Corrupted_Image msg)
+                 in raise (Corrupted_image msg)
                end;
                palette := Array.init palette_length
                  (fun i ->
@@ -622,7 +620,7 @@ module ReadPNG : ReadImage = struct
            | "IDAT" ->
                is_not_first_chunck curr_ctype;
                if has_read_chunck curr_ctype && last_chunck () <> curr_ctype
-               then raise (Corrupted_Image
+               then raise (Corrupted_image
                             "Chuncks IDAT should be consecutive...");
                raw_idat := String.concat "" [!raw_idat; !curr_chunck.chunck_data];
                if !debug then begin
@@ -719,7 +717,7 @@ module ReadPNG : ReadImage = struct
                          Printf.fprintf stderr "Pixel size Y axis: %i px/m\n" size_y
                        end;
                        pixel_size   := Some (size_x, size_y)  (* Unit is pixel / metre *)
-                | _ ->  raise (Corrupted_Image
+                | _ ->  raise (Corrupted_image
                                  "Unit not supported in pHYs chunk..."))
            | "sPLT" ->
                is_not_first_chunck curr_ctype;
@@ -756,7 +754,7 @@ module ReadPNG : ReadImage = struct
                end
            | ch_ty  ->
                let msg = Printf.sprintf "Unknown chunck type \"%s\"..." ch_ty in
-               raise (Corrupted_Image msg));
+               raise (Corrupted_image msg));
         read_chuncks := !curr_chunck.chunck_type :: !read_chuncks;
         curr_chunck := read_chunck ich
       done;
@@ -767,12 +765,12 @@ module ReadPNG : ReadImage = struct
     with
       End_of_file ->
         (close_in ich;
-         raise (Corrupted_Image "End of file reached before chunck end..."))
+         raise (Corrupted_image "End of file reached before chunck end..."))
     end;
   
     (* Check for trailing bytes... *)
     if (try let _ = input_char ich in true with End_of_file -> false)
-    then raise (Corrupted_Image "Data after the IEND chunck...");
+    then raise (Corrupted_image "Data after the IEND chunck...");
     close_in ich;
   
     let uncomp_idat = uncompress_string !raw_idat in
