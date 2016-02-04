@@ -1,0 +1,14 @@
+### Dependencies ###
+
+In order to compile imagelib, the following programs and libraries are
+required:
+ - OCaml
+ - Findlib
+ - OCamlbuild
+ - Camlzip
+ - GNU Make
+
+### Installation ###
+
+ > make
+ > sudo make install
