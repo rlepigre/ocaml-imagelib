@@ -49,7 +49,7 @@ distclean: clean
 	rm -f *~ _tags
 
 uninstall:
-	ocamlfind remove imagelib
+	@ocamlfind remove imagelib
 
 IMPL := $(addprefix _build/,$(IMPLFILES))
 INTF := $(addprefix _build/,$(INTFFILES))
@@ -60,4 +60,4 @@ OBJ  := $(IMPL:.ml=.o)
 LIB  := _build/imagelib.cma _build/imagelib.cmxa _build/imagelib.a META
 
 install: all uninstall
-	ocamlfind install imagelib $(CMX) $(CMO) $(CMI) $(OBJ) $(INTF) $(LIB)
+	@ocamlfind install imagelib $(CMX) $(CMO) $(CMI) $(OBJ) $(INTF) $(LIB)
