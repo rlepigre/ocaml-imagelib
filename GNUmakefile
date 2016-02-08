@@ -3,7 +3,7 @@ FLAGS := -cflags -w,-3 -use-ocamlfind
 IMPLFILES := $(wildcard *.ml)
 INTFFILES := $(wildcard *.ml)
 
-all: imagelib.cma imagelib.cmxa
+all: imagelib.cma imagelib.cmxa META
 
 # Try to find ocamlfind and ocamlbuild.
 OCAMLF := $(shell which ocamlfind 2> /dev/null)
@@ -35,6 +35,14 @@ endif
 
 _tags: depchecks GNUmakefile
 	@echo "true : package($(BIGARRAY)), package($(CAMLZIP))" > $@
+
+META: depchecks
+	@echo "name=\"imagelib\"" > $@
+	@echo "version=\"0.1\"" >> $@
+	@echo "description=\"A library for reading / writing images\"" >> $@
+	@echo "requires=\"$(CAMLZIP),$(BIGARRAY)\"" >> $@
+	@echo "archive(byte)=\"imagelib.cma\"" >> $@
+	@echo "archive(native)=\"imagelib.cmxa\"" >> $@
 
 imagelib.cma:  $(IMPLFILES) $(INTFFILES) GNUmakefile imagelib.mllib _tags
 	$(OCAMLBUILD) $(FLAGS) $@
