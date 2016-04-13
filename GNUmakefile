@@ -3,7 +3,7 @@ FLAGS := -cflags -w,-3 -use-ocamlfind
 IMPLFILES := $(wildcard *.ml)
 INTFFILES := $(wildcard *.ml)
 VERSION := 20160413
-URL=https://patoline.org/archive/imagelib
+URL=http://patoline.org/archive/imagelib
 
 all: imagelib.cma imagelib.cmxa META
 
