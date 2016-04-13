@@ -2,6 +2,8 @@ OCAMLBUILD := ocamlbuild
 FLAGS := -cflags -w,-3 -use-ocamlfind
 IMPLFILES := $(wildcard *.ml)
 INTFFILES := $(wildcard *.ml)
+VERSION := 20160413
+URL=https://patoline.org/archive/imagelib
 
 all: imagelib.cma imagelib.cmxa META
 
@@ -58,6 +60,32 @@ distclean: clean
 
 uninstall:
 	@ocamlfind remove imagelib
+
+#for imalib developper
+OPAMREPO=$(HOME)/Caml/opam-repository/packages/imagelib
+OPAMDIR := $(OPAMREPO)/imagelib.$(VERSION)
+URLSSH=patoline@patoline.org:/var/www/patoline/archive/imagelib
+TAR=imagelib_$(VERSION).tar.gz
+
+tar:
+	cd ../imagelib_0; darcs pull; make clean
+	cd ..; tar cvfz $(TAR) --exclude=_darcs --transform "s,imagelib_0,imagelib-$(VERSION),"  imagelib_0
+
+distrib: tar
+	scp ../$(TAR) $(URLSSH)/
+	ssh patoline@patoline.org "cd /var/www/patoline/archive/imagelib; ln -sf $(TAR) imagelib-latest.tar.gz"
+
+opam: distrib
+	sed -e s/__VERSION__/$(VERSION)/g opam.tmpl > opam
+	mkdir -p $(OPAMDIR)
+	cp opam $(OPAMDIR)/opam
+	cp description.txt $(OPAMDIR)/descr
+	echo -n "archive: \""  > $(OPAMDIR)/url
+	echo -n "$(URL)/$(TAR)" >> $(OPAMDIR)/url
+	echo "\"" >> $(OPAMDIR)/url
+	echo -n "checksum: \"" >> $(OPAMDIR)/url
+	echo -n `md5sum ../$(TAR) | cut -b -32` >> $(OPAMDIR)/url
+	echo "\"" >> $(OPAMDIR)/url
 
 IMPL := $(addprefix _build/,$(IMPLFILES))
 INTF := $(addprefix _build/,$(INTFFILES))
