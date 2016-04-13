@@ -56,7 +56,7 @@ clean:
 	$(OCAMLBUILD) -clean
 
 distclean: clean
-	rm -f *~ _tags META opam
+	rm -f *~ _tags META
 
 uninstall:
 	@ocamlfind remove imagelib
@@ -75,8 +75,8 @@ distrib: tar
 	scp ../$(TAR) $(URLSSH)/
 	ssh patoline@patoline.org "cd /var/www/patoline/archive/imagelib; ln -sf $(TAR) imagelib-latest.tar.gz"
 
+.PHONY: opam
 opam: distrib
-	sed -e s/__VERSION__/$(VERSION)/g opam.tmpl > opam
 	mkdir -p $(OPAMDIR)
 	cp opam $(OPAMDIR)/opam
 	cp description.txt $(OPAMDIR)/descr
