@@ -56,7 +56,7 @@ clean:
 	$(OCAMLBUILD) -clean
 
 distclean: clean
-	rm -f *~ _tags META
+	rm -f *~ _tags META opam
 
 uninstall:
 	@ocamlfind remove imagelib
