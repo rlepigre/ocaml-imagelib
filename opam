@@ -1,0 +1,16 @@
+opam-version: "1.2"
+name: "imagelib"
+version: "20160309.alpha"
+maintainer: "Rodolphe Lepigre<rodolphe.lepigre@univ-savoie.fr>"
+authors:
+  "Rodolphe Lepigre<rodolphe.lepigre@univ-savoie.fr>"
+bug-reports: "rodolphe.lepigre@univ-savoie.fr"
+license: "LGPL-3.0"
+#dev-repo: "darcs://lama.univ-savoie.fr/~raffalli/gles3/repos"
+build: [make]
+install: [make "install"]
+remove: ["ocamlfind" "remove" "imagelib"]
+depends: [
+  "ocamlfind" {build}
+  "camlzip"
+]
