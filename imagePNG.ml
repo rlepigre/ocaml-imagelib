@@ -66,8 +66,9 @@ module PNG_Zlib = struct
       output := str :: !output;
     in
   
-    (try Zlib.uncompress refill flush with
-      _ -> raise (PNG_Zlib_error "Zlib.uncompress failed..."));
+    (try Zlib.uncompress refill flush with Zlib.Error(msg,_) ->
+      let msg = Printf.sprintf "Zlib.uncompress failed (%s) ..." msg in
+      raise (PNG_Zlib_error msg));
   
     String.concat "" (List.rev !output)
   
@@ -90,8 +91,9 @@ module PNG_Zlib = struct
       output := str :: !output;
     in
   
-    (try Zlib.compress refill flush with
-      _ -> raise (PNG_Zlib_error "Zlib.compress failed..."));
+    (try Zlib.compress refill flush with Zlib.Error(msg,_) ->
+      let msg = Printf.sprintf "Zlib.compress failed (%s) ..." msg in
+      raise (PNG_Zlib_error msg));
   
     String.concat "" (List.rev !output)
 end

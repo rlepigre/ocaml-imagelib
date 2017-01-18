@@ -1,14 +1,14 @@
 OCAMLBUILD := ocamlbuild
 FLAGS := -cflags -w,-3 -use-ocamlfind
 IMPLFILES := $(wildcard *.ml)
-INTFFILES := $(wildcard *.ml)
-VERSION := 20160413
+INTFFILES := $(wildcard *.mli)
+VERSION := 20170118
 URL=http://patoline.org/archive/imagelib
 
 all: imagelib.cma imagelib.cmxa META
 
 # Try to find ocamlfind and ocamlbuild.
-OCAMLF := $(shell which ocamlfind 2> /dev/null)
+OCAMLF := $(shell which ocamlfind  2> /dev/null)
 OCAMLB := $(shell which ocamlbuild 2> /dev/null)
 
 # Try to find the camlzip library.

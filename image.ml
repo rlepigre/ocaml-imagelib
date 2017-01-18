@@ -57,8 +57,8 @@ type image =
 module type ReadImage =
   sig
     val extensions : string list
-    val size : string -> int * int
-    val openfile : string -> image
+    val size       : string -> int * int
+    val openfile   : string -> image
   end
 
 exception Corrupted_image of string

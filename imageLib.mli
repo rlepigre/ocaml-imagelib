@@ -63,5 +63,3 @@ module XCF :
   sig
     module ReadXCF : ReadImage
   end
-
-

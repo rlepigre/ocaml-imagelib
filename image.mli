@@ -69,4 +69,3 @@ module type ReadImage =
   end
 
 exception Not_yet_implemented of string
-
