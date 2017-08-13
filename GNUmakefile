@@ -51,15 +51,6 @@ imagelib.cma:  $(IMPLFILES) $(INTFFILES) GNUmakefile imagelib.mllib _tags
 imagelib.cmxa: $(IMPLFILES) $(INTFFILES) GNUmakefile imagelib.mllib _tags
 	$(OCAMLBUILD) $(FLAGS) $@
 
-clean:
-	$(OCAMLBUILD) -clean
-
-distclean: clean
-	rm -f *~ _tags META
-
-uninstall:
-	@ocamlfind remove imagelib
-
 IMPL := $(addprefix _build/,$(IMPLFILES))
 INTF := $(addprefix _build/,$(INTFFILES))
 CMX  := $(IMPL:.ml=.cmx)
@@ -70,3 +61,18 @@ LIB  := _build/imagelib.cma _build/imagelib.cmxa _build/imagelib.a META
 
 install: all uninstall
 	@ocamlfind install imagelib $(CMX) $(CMO) $(CMI) $(OBJ) $(INTF) $(LIB)
+
+uninstall:
+	@ocamlfind remove imagelib
+
+clean:
+	$(OCAMLBUILD) -clean
+
+distclean: clean
+	rm -f *~ _tags META
+
+.PHONY: release
+release: distclean
+	git push origin
+	git tag -a $(VERSION)
+	git push origin $(VERSION)
