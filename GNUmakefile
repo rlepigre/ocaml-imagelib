@@ -74,5 +74,5 @@ distclean: clean
 .PHONY: release
 release: distclean
 	git push origin
-	git tag -a $(VERSION)
-	git push origin $(VERSION)
+	git tag -a ocaml-imagelib_$(VERSION)
+	git push origin ocaml-imagelib_$(VERSION)
