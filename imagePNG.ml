@@ -140,7 +140,7 @@ module ReadPNG : ReadImage = struct
    * Arguments:
    *   - ich : input channel.
    *)
-  let read_signature ich =
+  let read_signature (ich:ImageUtil.chunk_reader) =
     let hdr = get_bytes ich 8 in
     if String.sub hdr 1 3 = "PNG" then
       (if hdr <> png_signature then
@@ -226,14 +226,13 @@ module ReadPNG : ReadImage = struct
    * Note: the image is not checked for inconsistency, only the signature and
    * header are checked.
    *)
-  let size fn =
-    let ich = open_in_bin fn in
+  let size ich =
     read_signature ich;
     let ihdr_chunck = read_chunck ich in
     if ihdr_chunck.chunck_type <> "IHDR" then
       raise (Corrupted_image "First chunck sould be of type IHDR...");
     let ihdr = data_from_ihdr ihdr_chunck.chunck_data in
-    close_in ich;
+    close_chunk_reader ich;
     ihdr.image_size
 
   (* Removes the filter on a scanline.
@@ -469,8 +468,7 @@ module ReadPNG : ReadImage = struct
     done;*)
     output
 
-  let openfile fn =
-    let ich = open_in_bin fn in
+  let parsefile ich =
     read_signature ich;
   
     let curr_chunck = ref (read_chunck ich) in
@@ -482,7 +480,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s should not appear more than once..." ctype
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -493,7 +491,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s should appear before chunck %s..." ctype ctype'
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -504,7 +502,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s should appear after chunck %s..." ctype ctype'
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -515,7 +513,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s can only be the first chunck..." ctype
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -526,7 +524,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s cannot be the first chunck..." ctype
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -537,7 +535,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s is not compatible with chunck %s..." ctype ctype'
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -558,7 +556,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s cannot appear after chunck %s..." ctype ctype'
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -784,14 +782,14 @@ module ReadPNG : ReadImage = struct
       end;
     with
       End_of_file ->
-        (close_in ich;
+        (close_chunk_reader ich;
          raise (Corrupted_image "End of file reached before chunck end..."))
     end;
   
     (* Check for trailing bytes... *)
-    if (try let _ = input_char ich in true with End_of_file -> false)
+    if (try let _ = chunk_byte ich in true with End_of_file -> false)
     then raise (Corrupted_image "Data after the IEND chunck...");
-    close_in ich;
+    close_chunk_reader ich;
   
     let uncomp_idat = uncompress_string !raw_idat in
   
@@ -884,7 +882,7 @@ module ReadPNG : ReadImage = struct
           write_grey image x y unfiltered_int.(y).(x)
         done
       done;
-      image
+      Ok image
 
      | 2 ->
        let image = create_rgb ~max_val:(ones bd) w h in
@@ -896,7 +894,7 @@ module ReadPNG : ReadImage = struct
            write_rgb image x y r g b
          done
        done;
-       image
+       Ok image
 
      | 3 ->
        let image = create_rgb ~max_val:255 w h in
@@ -912,7 +910,7 @@ module ReadPNG : ReadImage = struct
            write_rgb image x y p.r p.g p.b
          done
        done;
-       image
+       Ok image
 
      | 4 ->
        let image = create_grey ~alpha:true ~max_val:(ones bd) w h in
@@ -923,7 +921,7 @@ module ReadPNG : ReadImage = struct
              unfiltered_int.(y).(2 * x + 1);
          done
        done;
-       image
+       Ok image
 
      | 6 ->
        let image = create_rgb ~alpha:true ~max_val:(ones bd) w h in
@@ -936,7 +934,7 @@ module ReadPNG : ReadImage = struct
            write_rgba image x y r g b a
          done
        done;
-       image
+       Ok image
 
      | _ -> assert false
 end

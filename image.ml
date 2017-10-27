@@ -16,6 +16,9 @@
  *
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
+
+type chunk_reader = ImageUtil.chunk_reader
+
 module Pixmap =
   struct
     open Bigarray
@@ -57,8 +60,8 @@ type image =
 module type ReadImage =
   sig
     val extensions : string list
-    val size       : string -> int * int
-    val openfile   : string -> image
+    val size       : chunk_reader -> int * int
+    val parsefile   : chunk_reader -> (image, [> `Msg of string]) result
   end
 
 exception Corrupted_image of string
@@ -233,7 +236,7 @@ let write_greya i x y g a =
         Pixmap.set gg x y g;
         Pixmap.set aa x y a
       end
- 
+
 let write_grey i x y g =
   match i.pixels with
   | RGB(rr,gg,bb)

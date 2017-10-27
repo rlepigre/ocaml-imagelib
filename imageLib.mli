@@ -26,7 +26,7 @@ val size : string -> int * int
 (* [openfile fn] reads the image in the file [fn]. This function guesses the
    image format using the extension, and raises [Corrupted_image msg] in
    case of problem. *)
-val openfile : string -> Image.image
+val openfile : string -> (Image.image, [`Msg of string]) result
 
 (* [writefile fn img] writes the image [img] to the file [fn]. This function
    guesses the desired format using the extension. *)

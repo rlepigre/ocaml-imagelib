@@ -35,7 +35,7 @@ module ReadGIF : ReadImage = struct
   let extensions = ["gif"]
 
   (* Read signature and header *)
-  let read_header ich =
+  let read_header (ich:ImageUtil.chunk_reader) =
     let magic = get_bytes ich 3 in
     if magic <> "GIF" then
       raise (Corrupted_image "GIF signature expected...");
@@ -44,9 +44,9 @@ module ReadGIF : ReadImage = struct
       raise (Corrupted_image "Version of GIF not supported...");
     let width  = get_bytes ich 2 in
     let height = get_bytes ich 2 in
-    let packed = input_byte ich in
-    let bgcol  = input_byte ich in
-    let pixar  = input_byte ich in
+    let packed = chunk_byte ich in
+    let bgcol  = chunk_byte ich in
+    let pixar  = chunk_byte ich in
     let w = ((int_of_char width.[1]) lsl 8) lor (int_of_char width.[0]) in
     let h = ((int_of_char height.[1]) lsl 8) lor (int_of_char height.[0]) in
     {
@@ -58,7 +58,7 @@ module ReadGIF : ReadImage = struct
       size_glob_col_tbl  = packed mod 8 ;
       bg_color_index     = bgcol ;
       pix_aspect_ratio   = pixar
-     }
+    }
 
   (* Read the size of a GIF image.
    * Arguments:
@@ -67,12 +67,11 @@ module ReadGIF : ReadImage = struct
    * Note: the image is not checked for inconsistency, only the signature and
    * header are checked.
    *)
-  let size fn =
-    let ich = open_in_bin fn in
+  let size ich =
     let hdr = read_header ich in
-    close_in ich;
+    ImageUtil.close_chunk_reader ich;
     hdr.image_size
 
-  let openfile fn =
+  let parsefile fn =
     raise (Not_yet_implemented "ImageGIF.openfile") (* TODO  *)
 end
