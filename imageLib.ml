@@ -68,20 +68,22 @@ let size fn =
     rm fn'; sz
   end
 
-let openfile fn : (image, 'a) result =
+let openfile fn : image =
+  let fail_or_return = function Ok i -> i
+                       | Error (`Msg msg) -> raise (Corrupted_image msg) in
   let ext = String.lowercase_ascii (get_extension' fn) in
   let ich = chunk_reader_of_path fn in
   if List.mem ext ReadPNG.extensions
-  then ReadPNG.parsefile ich else
+  then ReadPNG.parsefile ich |> fail_or_return else
   if List.mem ext ReadPPM.extensions
-  then ReadPPM.parsefile ich else
+  then ReadPPM.parsefile ich |> fail_or_return else
   begin
     warning fn "Cannot read this image format...";
     let fn' = temp_file "image" ".png" in
     convert fn fn';
     let ich' = chunk_reader_of_path fn' in
     let img = ReadPNG.parsefile ich' in
-    rm fn'; img
+    rm fn'; fail_or_return img
   end
 
 let writefile fn i =
