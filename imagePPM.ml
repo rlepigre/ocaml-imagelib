@@ -42,37 +42,32 @@ module ReadPPM : ReadImage = struct
     let magic = ref "" in
     let width = ref (-1) and height = ref (-1) in
     let max_val = ref 1 in
-    let header_line_num = ref 0 in
-    let count s =
-      header_line_num := !header_line_num + count_line s;
-    in
     let scanner = Scanf.Scanning.from_function (fun () -> chunk_char content) in
     let rec pass_comments () =
       try
-        Scanf.bscanf scanner "#%[^\n\r]%[\t\n\r]" (fun s1 s2 ->
-            count s1; count s2);
+        Scanf.bscanf scanner "#%[^\n\r]%[\t\n\r]" (fun _ _ -> () );
         pass_comments ()
       with _ -> ()
     in
-    Scanf.bscanf scanner "%s%[\t\n ]" (fun mn s -> magic := mn;
-      count s);
+    Scanf.bscanf scanner "%s%[\t\n ]" (fun mn _ -> magic := mn);
     pass_comments ();
 
     if not (List.mem !magic ["P1"; "P2"; "P3"; "P4"; "P5"; "P6"]) then
       raise (Corrupted_image "Invalid magic number...");
 
-    if List.mem !magic ["P1"; "P4"] then (
-      Scanf.bscanf scanner "%u%[\t\n ]" (fun w s -> width := w; count s);
+    if List.mem !magic ["P1"; "P4"] then begin
+      Scanf.bscanf scanner "%u%[\t\n ]" (fun w _ -> width := w);
       pass_comments ();
-      Scanf.bscanf scanner "%u%1[\t\n ]" (fun h s -> height := h; count s))
-    else (
-      Scanf.bscanf scanner "%u%[\t\n ]" (fun w s -> width := w; count s);
+      Scanf.bscanf scanner "%u%1[\t\n ]" (fun h _ -> height := h)
+    end else begin
+      Scanf.bscanf scanner "%u%[\t\n ]" (fun w _ -> width := w);
       pass_comments ();
-      Scanf.bscanf scanner "%u%[\t\n ]" (fun h s -> height := h; count s);
+      Scanf.bscanf scanner "%u%[\t\n ]" (fun h _ -> height := h);
       pass_comments ();
-      Scanf.bscanf scanner "%u%1[\t\n ]" (fun mv s -> max_val := mv; count s));
+      Scanf.bscanf scanner "%u%1[\t\n ]" (fun mv _ -> max_val := mv)
+    end ;
 
-    !magic,!width,!height,!max_val,!header_line_num
+    !magic,!width,!height,!max_val,scanner
 
   (*
    * Reads the size of a PPM image from a file.
@@ -92,18 +87,8 @@ module ReadPPM : ReadImage = struct
    *)
   let parsefile content =
     try
-      let magic,w,h,max_val,hline_num = read_header content in
-      (* commented out:
-       * (what is the point of seek 0 when we skip hline_num anyway?)
-      seek_in content 0;
-      for i = 1 to hline_num do
-        ignore (chunk_line content)
-      done;
-      *)
+      let magic,w,h,max_val,scanner = read_header content in
 
-      let scanner =
-        Scanf.Scanning.from_function (fun () -> chunk_char content)
-      in
       match magic with
       | "P1" | "P2" ->
        let image = create_grey ~max_val:max_val w h in
