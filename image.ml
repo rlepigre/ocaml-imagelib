@@ -61,7 +61,7 @@ module type ReadImage =
   sig
     val extensions : string list
     val size       : chunk_reader -> int * int
-    val parsefile   : chunk_reader -> (image, [> `Msg of string]) result
+    val parsefile  : chunk_reader -> (image, [> `Msg of string]) result
   end
 
 exception Corrupted_image of string

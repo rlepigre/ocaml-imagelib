@@ -17,7 +17,7 @@
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
 
-type chunk_reader_error = [`End_of_file]
+type chunk_reader_error = [`End_of_file of int]
 type chunk_reader = ([`Bytes of int | `Close]) ->
                     (string, chunk_reader_error) result
 
@@ -163,7 +163,11 @@ let show_string_hex s =
 let get_bytes (reader:chunk_reader) num_bytes =
   reader (`Bytes num_bytes)
   |> function | Ok x -> x
-       | _ -> failwith "Failed to read expected number of bytes from stream"
+              | Error (`End_of_file pos) ->
+                (* Printf.eprintf ("Failed to read expected "
+                          ^(string_of_int num_bytes)^" bytes at pos "
+                          ^(string_of_int pos)^" from stream") ;*)
+                raise End_of_file
 
 let chunk_char (reader:chunk_reader) = String.get (get_bytes reader 1) 0
 let chunk_byte (reader:chunk_reader) = chunk_char reader |> Char.code
@@ -172,7 +176,7 @@ let chunk_reader_of_in_channel ich : chunk_reader =
   function
   | `Bytes num_bytes ->
     begin try Ok (really_input_string ich num_bytes)
-    with End_of_file -> Error `End_of_file end
+    with End_of_file -> Error (`End_of_file (pos_in ich))end
   | `Close -> close_in ich; Ok ""
 
 let chunk_reader_of_path fn = chunk_reader_of_in_channel (open_in_bin fn)

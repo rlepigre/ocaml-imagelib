@@ -10,11 +10,8 @@ all: imagelib.cma imagelib.cmxa META
 OCAMLF := $(shell which ocamlfind  2> /dev/null)
 OCAMLB := $(shell which ocamlbuild 2> /dev/null)
 
-# Try to find the camlzip library.
-CAMLZIP := $(shell ocamlfind query -format %p zip 2> /dev/null)
-ifeq ($(CAMLZIP),)
-	CAMLZIP := $(shell ocamlfind query -format %p camlzip 2> /dev/null)
-endif
+# Try to find the camldecompress library.
+CAMLDECOMPRESS := $(shell ocamlfind query -format %p decompress 2> /dev/null)
 
 # Try to find the bigarray library.
 BIGARRAY := $(shell ocamlfind query -format %p bigarray 2> /dev/null)
@@ -27,21 +24,22 @@ endif
 ifndef OCAMLF
 	$(error "The ocamlfind program is required...")
 endif
-ifeq ($(CAMLZIP),)
-	$(error "The zip / camlzip library is required...")
+ifeq ($(CAMLDECOMPRESS),)
+	$(error "The decompress library is required...")
 endif
 ifeq ($(BIGARRAY),)
 	$(error "The bigarray library is required...")
 endif
 
 _tags: depchecks GNUmakefile
-	@echo "true : package($(BIGARRAY)), package($(CAMLZIP))" > $@
+	@echo "true : package($(BIGARRAY)), package($(CAMLDECOMPRESS))" > $@
+	@echo "true : safe_string" >> $@
 
 META: depchecks
 	@echo "name=\"imagelib\"" > $@
 	@echo "version=\"0.1\"" >> $@
 	@echo "description=\"A library for reading / writing images\"" >> $@
-	@echo "requires=\"$(CAMLZIP),$(BIGARRAY)\"" >> $@
+	@echo "requires=\"$(CAMLDECOMPRESS),$(BIGARRAY)\"" >> $@
 	@echo "archive(byte)=\"imagelib.cma\"" >> $@
 	@echo "archive(native)=\"imagelib.cmxa\"" >> $@
 
