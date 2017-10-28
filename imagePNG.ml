@@ -343,18 +343,16 @@ module ReadPNG : ReadImage = struct
         let offset = pixnum * bpp in
         String.sub str offset bpp
       end else begin
-        (*Printf.fprintf stderr "pl_bit = %i, strlen = %i\n%!" pl_bit (String.length str);*)
         let bitoffset = pl_bit * pixnum in
-        (*Printf.fprintf stderr "byte offset = %i, bit offset = %i\n%!" (bitoffset / 8) (bitoffset mod 8);*)
-        let byte = if bitoffset / 8 >= (String.length str)
-                   then (Printf.fprintf stderr "Warning: out of bound...\n%!"; 255)
-                   else int_of_char str.[bitoffset / 8] in
-        (*let byte = int_of_char str.[bitoffset / 8] in*) (* FIXME *)
+        let byte =
+          if bitoffset / 8 >= (String.length str) then
+            (Printf.fprintf stderr "Warning: out of bound...\n%!"; 255)
+          else int_of_char str.[bitoffset / 8]
+        in
         let bitpos = bitoffset mod 8 in
         let mask = (ones pl_bit) lsl (8 - pl_bit) in
         let pix = (byte lsl bitpos) land mask in
         let res = String.make 1 (char_of_int pix) in
-        (*Printf.fprintf stderr "Leaving read_pix...\n%!";*)
         res
       end
     in
@@ -402,16 +400,6 @@ module ReadPNG : ReadImage = struct
         let mask = lnot (((ones pl_bit) lsl (8 - pl_bit)) lsr bit) in
         let newcontent = (content land mask) lor (pixv lsr bit) in
         str.[byte] <- char_of_int newcontent;
-        (* DEBUG FIXME *)
-        (*
-        Printf.fprintf stderr "Writing %i in byte %i at pos %i: "
-          (pixv lsr 7) byte bit;
-        print_byte content;
-        Printf.fprintf stderr " -> ";
-        print_byte (int_of_char str.[byte]);
-        Printf.fprintf stderr "\n%!";
-        *)
-        (* DEBUG FIXME *)
       end
     in
 
@@ -431,10 +419,6 @@ module ReadPNG : ReadImage = struct
           if !ft < 0 then ft := read_byte ();
   
           let pix = read_pixel () in
-          (*
-          let pval = (int_of_char pix.[0]) lsr 7 in
-          Printf.fprintf stderr "reading pixel at pos: (x = %i, y = %i, val = %i)\n%!" !col !row pval;
-          *)
   
           output_pixel pix !slpos sl;
           incr slpos;
@@ -442,11 +426,6 @@ module ReadPNG : ReadImage = struct
           col := !col + col_increment.(pass)
         done;
         flush_end_of_byte ();
-(*        Printf.fprintf stderr "scanline : ";
-        for blibli = 0 to (!slpos - 1) / 8 do
-          print_byte (int_of_char sl.[blibli]);
-        done;
-        Printf.fprintf stderr "\n%!";*)
   
         if !ft >= 0 then begin
           let bitlen = !slpos * pl_bit in
@@ -476,13 +455,6 @@ module ReadPNG : ReadImage = struct
         row := !row + row_increment.(pass)
       done
     done;
-(*
-    for y = 0 to Array.length output - 1 do
-      for x = 0 to String.length output.(y) - 1 do
-        print_byte (int_of_char output.(y).[x])
-      done;
-      Printf.fprintf stderr "\n%!";
-    done;*)
     output
 
   let parsefile ich =
