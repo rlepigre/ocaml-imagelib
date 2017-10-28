@@ -66,7 +66,6 @@ module type ReadImage =
 
 exception Corrupted_image of string
 exception Not_yet_implemented of string
-exception Wrong_image_type
 
 let create_rgb ?(alpha=false) ?(max_val=255) width height =
   assert (1 <= max_val && max_val <= 65535);
