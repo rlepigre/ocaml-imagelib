@@ -16,6 +16,11 @@
  *
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
+
+type chunk_reader_error = [`End_of_file of int]
+type chunk_reader = ([`Bytes of int | `Close]) ->
+                    (string, chunk_reader_error) result
+
 open Pervasives
 
 (** [chop_extension' fname] is the same as [Filename.chop_extension fname] but
@@ -155,9 +160,35 @@ let show_string_hex s =
  *   - n : number of bytes to fecth
  * Returns a string of length n.
  *)
-let get_bytes ich n =
-  let str = String.create n in
-  really_input ich str 0 n; str
+let get_bytes (reader:chunk_reader) num_bytes =
+  reader (`Bytes num_bytes)
+  |> function | Ok x -> x
+              | Error (`End_of_file pos) ->
+                (* Printf.eprintf ("Failed to read expected "
+                          ^(string_of_int num_bytes)^" bytes at pos "
+                          ^(string_of_int pos)^" from stream") ;*)
+                raise End_of_file
+
+let chunk_char (reader:chunk_reader) = String.get (get_bytes reader 1) 0
+let chunk_byte (reader:chunk_reader) = chunk_char reader |> Char.code
+
+let chunk_reader_of_in_channel ich : chunk_reader =
+  function
+  | `Bytes num_bytes ->
+    begin try Ok (really_input_string ich num_bytes)
+    with End_of_file -> Error (`End_of_file (pos_in ich))end
+  | `Close -> close_in ich; Ok ""
+
+let chunk_reader_of_path fn = chunk_reader_of_in_channel (open_in_bin fn)
+let close_chunk_reader (reader:chunk_reader) = ignore (reader `Close)
+let chunk_line (reader:chunk_reader) =
+  let rec loop acc =
+    match chunk_char reader with
+    | '\n' ->
+      let a = Array.of_list acc in
+      Bytes.init (Array.length a) (fun i -> a.(i)) |> Bytes.to_string
+    | c  -> loop (c::acc)
+  in loop []
 
 let print_byte v =
   for i = 7 downto 0 do

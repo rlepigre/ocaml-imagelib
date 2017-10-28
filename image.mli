@@ -63,9 +63,10 @@ exception Corrupted_image of string
 
 module type ReadImage =
   sig
+    open ImageUtil
     val extensions : string list
-    val size       : string -> int * int
-    val openfile   : string -> image
+    val size       : chunk_reader -> int * int
+    val parsefile  : chunk_reader -> (image, [> `Msg of string])  result
   end
 
 exception Not_yet_implemented of string

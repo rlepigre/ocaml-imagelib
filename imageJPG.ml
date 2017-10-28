@@ -24,11 +24,11 @@ module ReadJPG : ReadImage = struct
   let extensions = ["jpg"; "jpeg"; "jpe"; "jif"; "jfif"; "jfi"]
 
   let read_marker ich =
-    let ff = input_byte ich in
+    let ff = chunk_byte ich in
     if ff <> 0xff then
       raise (Corrupted_image "Expected marker...");
     let rec read_first_not_ff ich =
-      let c = input_byte ich in
+      let c = chunk_byte ich in
       if c = 0xff then read_first_not_ff ich else c
     in
     let c = read_first_not_ff ich in
@@ -62,10 +62,9 @@ module ReadJPG : ReadImage = struct
    * Note: the image is not checked for inconsistency, only the signature and
    * header are checked.
    *)
-  let size fn =
-    let ich = open_in_bin fn in
+  let size ich =
     let headers = read_header_data ich in
-    close_in ich;
+    close_chunk_reader ich;
 
     let rec find_SOF ls =
       match ls with
@@ -83,6 +82,6 @@ module ReadJPG : ReadImage = struct
     let width = ((int_of_char sof.[3]) lsl 8) lor (int_of_char sof.[4]) in
     width, height
 
-  let openfile fn =
+  let parsefile fn =
     raise (Not_yet_implemented "ImageJPG.openfile") (* TODO  *)
 end

@@ -42,60 +42,77 @@ type pixel =
   { r : int ; g : int ; b : int }
 
 (****************************************************************************
- * Zlib compression functions relying on ocaml-zip                          *
+ * Zlib compression functions relying on decompress
+
  ****************************************************************************)
 module PNG_Zlib = struct
   exception PNG_Zlib_error of string
- 
-  let uncompress_string inputstr =
-    let len = String.length inputstr in
+
+  open Decompress
+
+  let uncompress_string (input_ro:string) : string =
+    let inputstr = Bytes.of_string input_ro in
+    let len = Bytes.length inputstr in
     let inputpos = ref 0 in
-    let output = ref [] in
-  
-    let refill strbuf =
-      let buflen = String.length strbuf in
+    let input_temp, output_temp = Bytes.(create 0xFFFF, create 0xFFFF) in
+    let final_output = Buffer.create (len / 3) in (* approx avg rate *)
+
+    let refill (strbuf:Bytes.t) : int =
       let remaining = len - !inputpos in
-      let tocopy = min remaining buflen in
-      String.blit inputstr !inputpos strbuf 0 tocopy;
+      let tocopy = min 0xFFFF remaining in
+      Bytes.blit inputstr !inputpos strbuf 0 tocopy;
       inputpos := !inputpos + tocopy;
       tocopy
     in
-  
+
     let flush strbuf len =
-      let str = String.sub strbuf 0 len in
-      output := str :: !output;
+      Buffer.add_subbytes final_output strbuf 0 len ;
+      0xFFFF
     in
-  
-    (try Zlib.uncompress refill flush with Zlib.Error(msg,_) ->
-      let msg = Printf.sprintf "Zlib.uncompress failed (%s) ..." msg in
-      raise (PNG_Zlib_error msg));
-  
-    String.concat "" (List.rev !output)
-  
-  let compress_string inputstr =
+
+    let window = Window.create ~proof:B.proof_bytes in
+
+    begin match
+        Inflate.bytes input_temp output_temp
+          refill flush Inflate.(default window) with
+    | Error _ ->
+      let msg = Printf.sprintf "Decompress.Inflate.bytes failed ..." in
+      raise (PNG_Zlib_error msg);
+    | Ok _ -> Buffer.contents final_output
+    end
+
+  let compress_string (inputstr:string) : string =
     let len = String.length inputstr in
     let inputpos = ref 0 in
-    let output = ref [] in
-  
-    let refill strbuf =
-      let buflen = String.length strbuf in
+    let input_temp, output_temp = Bytes.(create 0xFFFF , create 0xFFFF) in
+    let final_output = Buffer.create (len * 3) in (* approx avg rate *)
+
+    let refill strbuf _max : int =
+      let max = match _max with None -> 0xFFFF | Some m -> m in
       let remaining = len - !inputpos in
-      let tocopy = min remaining buflen in
-      String.blit inputstr !inputpos strbuf 0 tocopy;
+      let tocopy = min max remaining in
+      Bytes.blit_string inputstr !inputpos strbuf 0 tocopy;
       inputpos := !inputpos + tocopy;
       tocopy
     in
-  
-    let flush strbuf len =
-      let str = String.sub strbuf 0 len in
-      output := str :: !output;
+
+    let flush strbuf f_len =
+      Buffer.add_subbytes final_output strbuf 0 f_len ; 0xFFFF
     in
-  
-    (try Zlib.compress refill flush with Zlib.Error(msg,_) ->
-      let msg = Printf.sprintf "Zlib.compress failed (%s) ..." msg in
-      raise (PNG_Zlib_error msg));
-  
-    String.concat "" (List.rev !output)
+
+    (* Computations<->size trade-off (see Decompress.Deflate.default): *)
+    let compression_level = 4 in
+
+    let window = Deflate.default ~proof:B.proof_bytes compression_level in
+
+    begin match Deflate.bytes input_temp output_temp
+                  refill flush window with
+    | Error _ ->
+      let msg = Printf.sprintf "Decompress.Deflate.bytes failed ..." in
+      raise (PNG_Zlib_error msg)
+    | Ok _ -> Buffer.contents final_output
+    end
+
 end
 
 open PNG_Zlib
@@ -140,7 +157,7 @@ module ReadPNG : ReadImage = struct
    * Arguments:
    *   - ich : input channel.
    *)
-  let read_signature ich =
+  let read_signature (ich:ImageUtil.chunk_reader) =
     let hdr = get_bytes ich 8 in
     if String.sub hdr 1 3 = "PNG" then
       (if hdr <> png_signature then
@@ -226,14 +243,13 @@ module ReadPNG : ReadImage = struct
    * Note: the image is not checked for inconsistency, only the signature and
    * header are checked.
    *)
-  let size fn =
-    let ich = open_in_bin fn in
+  let size ich =
     read_signature ich;
     let ihdr_chunck = read_chunck ich in
     if ihdr_chunck.chunck_type <> "IHDR" then
       raise (Corrupted_image "First chunck sould be of type IHDR...");
     let ihdr = data_from_ihdr ihdr_chunck.chunck_data in
-    close_in ich;
+    close_chunk_reader ich;
     ihdr.image_size
 
   (* Removes the filter on a scanline.
@@ -244,7 +260,7 @@ module ReadPNG : ReadImage = struct
    *   - prev_scanline : previous scanline with filter removed.
    * Returns the unfiltered scanline.
    *)
-  let unfilter ftype bpp scanline prev_scanline =
+  let unfilter ftype bpp scanline prev_scanline : string =
     let paeth_predictor a b c =
       let p = a + b - c in
       let pa = abs (p - a) in
@@ -254,15 +270,15 @@ module ReadPNG : ReadImage = struct
       then a
       else (if pb <= pc then b else c)
     in
-  
+
     let slen = String.length scanline in
-    let unfiltered = String.create slen in
-  
+    let unfiltered = Bytes.create slen in
+
     for x = 0 to slen - 1 do
       let filtx = int_of_char scanline.[x] in
       let recona =
         let j = x - bpp in
-        if j < 0 then 0 else int_of_char unfiltered.[j]
+        if j < 0 then 0 else int_of_char (Bytes.get unfiltered j)
       in
       let reconb =
         match prev_scanline with
@@ -286,10 +302,10 @@ module ReadPNG : ReadImage = struct
          | _ -> let msg = Printf.sprintf "Unknown filter type (%i)..." ftype in
                 raise (Corrupted_image msg)
       in
-      String.set unfiltered x (char_of_int recon)
+      Bytes.set unfiltered x (char_of_int recon)
     done;
-    unfiltered
-  
+    Bytes.to_string unfiltered
+
   (*
    * Pass extraction function.
    * Arguments :
@@ -309,7 +325,7 @@ module ReadPNG : ReadImage = struct
     let rowsize_bit = w * pl_bit in
     let rowsize = rowsize_bit / 8 + if rowsize_bit mod 8 <> 0 then 1 else 0 in
     let zchar = char_of_int 0 in
-    let output = Array.init h (fun _ -> String.make rowsize zchar) in
+    let output = Array.init h (fun _ -> Bytes.make rowsize zchar) in
   
     let input_byte = ref 0 in
     let input_bit = ref 0 in
@@ -361,7 +377,7 @@ module ReadPNG : ReadImage = struct
         String.make 1 (char_of_int pix)
       end
     in
-  
+
     let flush_end_of_byte () =
       if !input_bit <> 0
       then begin
@@ -369,8 +385,8 @@ module ReadPNG : ReadImage = struct
         incr input_byte
       end
     in
-  
-    (* Writes the pixel pix at pixel position pos in the string str. *)
+
+    (* Writes the pixel pix at pixel position pos in the `bytes` str. *)
     let output_pixel pix pos str =
       if pl_bit mod 8 = 0
       then begin
@@ -382,7 +398,7 @@ module ReadPNG : ReadImage = struct
         let bitpos = pos * pl_bit in
         let byte = bitpos / 8 in
         let bit = bitpos mod 8 in
-        let content = int_of_char str.[byte] in
+        let content = int_of_char @@ Bytes.get str byte in
         let mask = lnot (((ones pl_bit) lsl (8 - pl_bit)) lsr bit) in
         let newcontent = (content land mask) lor (pixv lsr bit) in
         str.[byte] <- char_of_int newcontent;
@@ -398,8 +414,8 @@ module ReadPNG : ReadImage = struct
         (* DEBUG FIXME *)
       end
     in
-  
-    let sl = String.make (w * 8) zchar in (* ugly... (2bytes x 4 component) *)
+
+    let sl = Bytes.make (w * 8) zchar in (* ugly... (2bytes x 4 component) *)
     let slpos = ref 0 in
   
     for pass = 0 to 6 do
@@ -438,21 +454,21 @@ module ReadPNG : ReadImage = struct
           if bitlen mod 8 <> 0 then begin
             let nbbits = bitlen mod 8 in
             let mask = ones nbbits lsl (8 - nbbits) in
-            let last = int_of_char sl.[sllen - 1] in
+            let last = int_of_char @@ Bytes.get sl (sllen - 1) in
             sl.[sllen - 1] <- char_of_int (last land mask)
           end;
-          let sl = String.sub sl 0 sllen in
+          let sl = Bytes.sub sl 0 sllen in
           let bpp = max (pl_bit / 8) 1 in
-          let slunfilt = unfilter !ft bpp sl !prevsl in
+          let slunfilt = unfilter !ft bpp (Bytes.to_string sl) !prevsl in
           prevsl := Some slunfilt;
-  
+
           col := starting_col.(pass);
           slpos := 0;
           while !col < w do
             let pix = read_pix slunfilt !slpos in
             incr slpos;
             output_pixel pix !col output.(!row);
-  
+
             col := !col + col_increment.(pass)
           done;
         end;
@@ -469,20 +485,19 @@ module ReadPNG : ReadImage = struct
     done;*)
     output
 
-  let openfile fn =
-    let ich = open_in_bin fn in
+  let parsefile ich =
     read_signature ich;
-  
+
     let curr_chunck = ref (read_chunck ich) in
     let read_chuncks = ref [] in
-  
+
     let only_once ctype =
       if List.mem ctype !read_chuncks
       then begin
         let msg = Printf.sprintf
                     "Chunck %s should not appear more than once..." ctype
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -493,7 +508,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s should appear before chunck %s..." ctype ctype'
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -504,7 +519,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s should appear after chunck %s..." ctype ctype'
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -515,7 +530,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s can only be the first chunck..." ctype
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -526,7 +541,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s cannot be the first chunck..." ctype
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -537,7 +552,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s is not compatible with chunck %s..." ctype ctype'
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -558,7 +573,7 @@ module ReadPNG : ReadImage = struct
         let msg = Printf.sprintf
                     "Chunck %s cannot appear after chunck %s..." ctype ctype'
         in
-        close_in ich;
+        close_chunk_reader ich;
         raise (Corrupted_image msg)
       end
     in
@@ -649,7 +664,7 @@ module ReadPNG : ReadImage = struct
                end
            (* IEND cannot occur (end condition of the loop) *)
            (* | "IEND" -> *)
-  
+
            (* Ancillary chunks *)
            | "cHRM" ->
                only_once curr_ctype;
@@ -784,15 +799,16 @@ module ReadPNG : ReadImage = struct
       end;
     with
       End_of_file ->
-        (close_in ich;
+        (close_chunk_reader ich;
          raise (Corrupted_image "End of file reached before chunck end..."))
     end;
-  
+
     (* Check for trailing bytes... *)
-    if (try let _ = input_char ich in true with End_of_file -> false)
+    if (try let _ = chunk_byte ich in true with End_of_file -> false)
     then raise (Corrupted_image "Data after the IEND chunck...");
-    close_in ich;
-  
+
+    close_chunk_reader ich;
+
     let uncomp_idat = uncompress_string !raw_idat in
   
     let w, h = !ihdr.image_size in
@@ -829,7 +845,7 @@ module ReadPNG : ReadImage = struct
              (ft, sl)
            )
          in
-       
+
          (* Removing the filter on the scanlines *)
          let prev_scanline = ref None in
          Array.mapi
@@ -840,13 +856,13 @@ module ReadPNG : ReadImage = struct
        | 1 ->
          if !debug then Printf.fprintf stderr "Interlace method 1.\n%!";
          let pixlen_bit = nb_comp * bd in
-         extract_pass uncomp_idat pixlen_bit w h
+         extract_pass uncomp_idat pixlen_bit w h |> Array.map (Bytes.to_string)
        | _ -> assert false
     in
-  
+
     (* Conversion of the array of string into an array of array of int *)
     let unfiltered_int = Array.init h (fun y -> Array.make (w * nb_comp) 0) in
-  
+
     for y = 0 to h - 1 do
       for x = 0 to (w * nb_comp) - 1 do
         match bd with
@@ -884,7 +900,7 @@ module ReadPNG : ReadImage = struct
           write_grey image x y unfiltered_int.(y).(x)
         done
       done;
-      image
+      Ok image
 
      | 2 ->
        let image = create_rgb ~max_val:(ones bd) w h in
@@ -896,7 +912,7 @@ module ReadPNG : ReadImage = struct
            write_rgb image x y r g b
          done
        done;
-       image
+       Ok image
 
      | 3 ->
        let image = create_rgb ~max_val:255 w h in
@@ -906,24 +922,24 @@ module ReadPNG : ReadImage = struct
            let index = (* FIXME *)
              if index >= Array.length !palette
              then (Printf.fprintf stderr "Palette index too big...\n%!"; 0)
-             else index 
+             else index
            in
            let p = !palette.(index) in
            write_rgb image x y p.r p.g p.b
          done
        done;
-       image
+       Ok image
 
      | 4 ->
        let image = create_grey ~alpha:true ~max_val:(ones bd) w h in
        for y = 0 to h - 1 do
          for x = 0 to w - 1 do
-           write_greya image x y 
+           write_greya image x y
              unfiltered_int.(y).(2 * x)
              unfiltered_int.(y).(2 * x + 1);
          done
        done;
-       image
+       Ok image
 
      | 6 ->
        let image = create_rgb ~alpha:true ~max_val:(ones bd) w h in
@@ -936,7 +952,7 @@ module ReadPNG : ReadImage = struct
            write_rgba image x y r g b a
          done
        done;
-       image
+       Ok image
 
      | _ -> assert false
 end
@@ -949,7 +965,7 @@ let write_signature och =
 
 let write_chunk och chunck =
   let len = String.length chunck.chunck_data in
-  output_string och (int_to_str4 len);
+  output_string och (int_to_str4 len |> Bytes.to_string);
   output_string och chunck.chunck_type;
   output_string och chunck.chunck_data;
   let type_and_data = String.concat ""
@@ -965,15 +981,15 @@ let write_chunk och chunck =
   output_char och (char_of_int crc0)
 
 let ihdr_to_string ihdr =
-  let s = String.create 13 in
-  String.blit (int_to_str4 (fst ihdr.image_size)) 0 s 0 4;
-  String.blit (int_to_str4 (snd ihdr.image_size)) 0 s 4 4;
+  let s = Bytes.create 13 in
+  Bytes.blit (int_to_str4 (fst ihdr.image_size)) 0 s 0 4;
+  Bytes.blit (int_to_str4 (snd ihdr.image_size)) 0 s 4 4;
   s.[8] <- char_of_int ihdr.bit_depth;
   s.[9] <- char_of_int ihdr.colour_type;
   s.[10] <- char_of_int ihdr.compression_method;
   s.[11] <- char_of_int ihdr.filter_method;
   s.[12] <- char_of_int ihdr.interlace_method;
-  s
+  Bytes.to_string s
 
 let write_png fn img =
   let och = open_out_bin fn in

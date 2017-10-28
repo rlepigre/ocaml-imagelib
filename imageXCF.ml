@@ -64,12 +64,11 @@ module ReadXCF : ReadImage = struct
    * Note: the image is not checked for inconsistency, only the signature and
    * header are checked.
    *)
-  let size fn =
-    let ich = open_in_bin fn in
+  let size ich =
     let hdr = read_header ich in
-    close_in ich;
+    close_chunk_reader ich;
     hdr.image_size
 
-  let openfile fn =
+  let parsefile fn =
     raise (Not_yet_implemented "ImageXCF.openfile") (* TODO  *)
 end

@@ -47,41 +47,47 @@ let warning fn msg =
   Printf.eprintf "  PNG is the prefered format!\n%!"
 
 let size fn =
-  let ext = String.lowercase (get_extension' fn) in
+  let ext = String.lowercase_ascii (get_extension' fn) in
+  let ich = chunk_reader_of_path fn in
   if List.mem ext ReadPNG.extensions
-  then ReadPNG.size fn else
+  then ReadPNG.size ich else
   if List.mem ext ReadPPM.extensions
-  then ReadPPM.size fn else
+  then ReadPPM.size ich else
   if List.mem ext ReadXCF.extensions
-  then ReadXCF.size fn else
+  then ReadXCF.size ich else
   if List.mem ext ReadJPG.extensions
-  then ReadJPG.size fn else
+  then ReadJPG.size ich else
   if List.mem ext ReadGIF.extensions
-  then ReadGIF.size fn else
+  then ReadGIF.size ich else
   begin
     warning fn "No support for image size...";
     let fn' = temp_file "image" ".png" in
     convert fn fn';
-    let sz = ReadPNG.size fn' in
+    let ich' = chunk_reader_of_path fn' in
+    let sz = ReadPNG.size ich' in
     rm fn'; sz
   end
 
-let openfile fn =
-  let ext = String.lowercase (get_extension' fn) in
+let openfile fn : image =
+  let fail_or_return = function Ok i -> i
+                       | Error (`Msg msg) -> raise (Corrupted_image msg) in
+  let ext = String.lowercase_ascii (get_extension' fn) in
+  let ich = chunk_reader_of_path fn in
   if List.mem ext ReadPNG.extensions
-  then ReadPNG.openfile fn else
+  then ReadPNG.parsefile ich |> fail_or_return else
   if List.mem ext ReadPPM.extensions
-  then ReadPPM.openfile fn else
+  then ReadPPM.parsefile ich |> fail_or_return else
   begin
     warning fn "Cannot read this image format...";
     let fn' = temp_file "image" ".png" in
     convert fn fn';
-    let img = ReadPNG.openfile fn' in
-    rm fn'; img
+    let ich' = chunk_reader_of_path fn' in
+    let img = ReadPNG.parsefile ich' in
+    rm fn'; fail_or_return img
   end
 
 let writefile fn i =
-  let ext = String.lowercase (get_extension' fn) in
+  let ext = String.lowercase_ascii (get_extension' fn) in
   if List.mem ext ReadPNG.extensions
   then write_png fn i else
   if List.mem ext ReadPPM.extensions
