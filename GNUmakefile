@@ -2,7 +2,7 @@ OCAMLBUILD := ocamlbuild
 FLAGS := -cflags -w,-3 -use-ocamlfind
 IMPLFILES := $(wildcard *.ml)
 INTFFILES := $(wildcard *.mli)
-VERSION := 20170118
+VERSION := 20171028
 
 all: imagelib.cma imagelib.cmxa META
 
