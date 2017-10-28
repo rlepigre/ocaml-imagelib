@@ -85,9 +85,20 @@ module ReadPPM : ReadImage = struct
    *   - fn : the path to the file.
    * Raise the exception Corrupted_image if the file is not valid.
    *)
-  let parsefile content =
+  let parsefile (ich:chunk_reader) =
+    let prev_byte = ref None in
     try
-      let magic,w,h,max_val,scanner = read_header content in
+      let magic,w,h,max_val,scanner =
+        (function | `Bytes 1 -> let b = ich (`Bytes 1) in
+                                prev_byte := Some b; b
+                  | orig -> ich orig )
+        |> read_header
+      in
+      let content : chunk_reader = function
+        | `Bytes 1 -> begin match !prev_byte with | Some x -> prev_byte:=None; x
+                                                  | None -> ich (`Bytes 1) end
+        | orig -> ich orig
+      in
 
       match magic with
       | "P1" | "P2" ->
