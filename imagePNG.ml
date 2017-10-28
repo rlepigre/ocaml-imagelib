@@ -900,7 +900,7 @@ module ReadPNG : ReadImage = struct
           write_grey image x y unfiltered_int.(y).(x)
         done
       done;
-      Ok image
+      image
 
      | 2 ->
        let image = create_rgb ~max_val:(ones bd) w h in
@@ -912,7 +912,7 @@ module ReadPNG : ReadImage = struct
            write_rgb image x y r g b
          done
        done;
-       Ok image
+       image
 
      | 3 ->
        let image = create_rgb ~max_val:255 w h in
@@ -928,7 +928,7 @@ module ReadPNG : ReadImage = struct
            write_rgb image x y p.r p.g p.b
          done
        done;
-       Ok image
+       image
 
      | 4 ->
        let image = create_grey ~alpha:true ~max_val:(ones bd) w h in
@@ -939,7 +939,7 @@ module ReadPNG : ReadImage = struct
              unfiltered_int.(y).(2 * x + 1);
          done
        done;
-       Ok image
+       image
 
      | 6 ->
        let image = create_rgb ~alpha:true ~max_val:(ones bd) w h in
@@ -952,7 +952,7 @@ module ReadPNG : ReadImage = struct
            write_rgba image x y r g b a
          done
        done;
-       Ok image
+       image
 
      | _ -> assert false
 end

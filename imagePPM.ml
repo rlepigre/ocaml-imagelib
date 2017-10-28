@@ -109,7 +109,7 @@ module ReadPPM : ReadImage = struct
              write_grey image x y v)
          done
        done;
-       Ok image
+       image
 
      | "P3" ->
        let image = create_rgb ~max_val:max_val w h in
@@ -120,7 +120,7 @@ module ReadPPM : ReadImage = struct
                write_rgb image x y r g b)
          done
        done;
-       Ok image
+       image
 
      | "P4" ->
        let image = create_grey ~max_val:1 w h in
@@ -136,7 +136,7 @@ module ReadPPM : ReadImage = struct
            incr x
          done
        done;
-       Ok image
+       image
 
      | "P5" ->
        let image = create_grey ~max_val:max_val w h in
@@ -151,7 +151,7 @@ module ReadPPM : ReadImage = struct
              write_grey image x y ((b0 lsl 8) + b1))
          done
        done;
-       Ok image
+       image
 
      | "P6" ->
        let image = create_rgb ~max_val:max_val w h in
@@ -175,7 +175,7 @@ module ReadPPM : ReadImage = struct
              write_rgb image x y r g b)
          done
        done;
-       Ok image
+       image
 
      | _ ->
        raise (Corrupted_image "Invalid magic number...")

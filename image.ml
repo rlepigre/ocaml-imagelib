@@ -17,7 +17,7 @@
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
 
-type chunk_reader = ImageUtil.chunk_reader
+open ImageUtil
 
 module Pixmap =
   struct
@@ -61,7 +61,7 @@ module type ReadImage =
   sig
     val extensions : string list
     val size       : chunk_reader -> int * int
-    val parsefile  : chunk_reader -> (image, [> `Msg of string]) result
+    val parsefile  : chunk_reader -> image
   end
 
 exception Corrupted_image of string

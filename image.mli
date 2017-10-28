@@ -66,7 +66,7 @@ module type ReadImage =
     open ImageUtil
     val extensions : string list
     val size       : chunk_reader -> int * int
-    val parsefile  : chunk_reader -> (image, [> `Msg of string])  result
+    val parsefile  : chunk_reader -> image
   end
 
 exception Not_yet_implemented of string
