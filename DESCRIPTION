@@ -1,6 +1,6 @@
 The imagelib library implements image formats such as PNG and PPM
 
-The imagelib library implements image formats such as PNG and PPM  in
+The imagelib library implements image formats such as PNG and PPM in
 OCaml, relying on only one external dependency: 'decompress'.
 
 Supported image formats:
@@ -11,6 +11,7 @@ Supported image formats:
  - XCF (only image size natively, conversion to PNG otherwise),
  - Other formats rely on 'convert' (imagemagick).
 
-As imagelib only requires 'decompress', it is suitable for compilation to
-javascript using js_of_ocaml (only for operations not requireing the
-convert binary).
+As imagelib only requires 'decompress', it can be used together with
+js_of_ocaml to compile projects to Javascript. Note that some of the
+features of imagelib require the convert binary  (and thus cannot be
+used from Javascript).
