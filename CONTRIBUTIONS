@@ -1,0 +1,7 @@
+Pierre-Étienne Meunier (2014):
+  - fixed an early PNG bug (not tracked in the new repository)
+
+Romain Calascibetta (2017):
+  - ported imagelib to his "decompress" (pure ocaml) library
+  - allow for reading functions not based on in_channel (pluggable)
+  - fixed several compilation warnings in early versions of OCaml
