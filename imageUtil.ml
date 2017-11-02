@@ -249,11 +249,11 @@ let int32_of_str4 s =
  *   - i : the integer
  * Returns a string.
  *)
-let int_to_str4 i =
+let int_to_str4 i : Bytes.t =
   let s = Bytes.create 4 in
   let mask = ones 8 in
   Bytes.set s 0 @@ char_of_int (i lsr 24);
   Bytes.set s 1 @@ char_of_int ((i lsr 16) land mask);
   Bytes.set s 2 @@ char_of_int ((i lsr 8) land mask);
   Bytes.set s 3 @@ char_of_int (i land mask);
-  Bytes.to_string s
+  s
