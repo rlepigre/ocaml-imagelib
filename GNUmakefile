@@ -34,6 +34,7 @@ endif
 _tags: depchecks GNUmakefile
 	@echo "true : package($(BIGARRAY)), package($(CAMLDECOMPRESS))" > $@
 	@echo "true : safe_string" >> $@
+	@echo "true : bin_annot" >> $@
 
 META: depchecks
 	@echo "name=\"imagelib\"" > $@
