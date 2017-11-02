@@ -172,6 +172,16 @@ let get_bytes (reader:chunk_reader) num_bytes =
 let chunk_char (reader:chunk_reader) = String.get (get_bytes reader 1) 0
 let chunk_byte (reader:chunk_reader) = chunk_char reader |> Char.code
 
+let chunk_reader_of_string s : chunk_reader =
+  let offset = ref 0 in
+  function
+  | `Close -> Ok ""
+  | `Bytes n ->
+    begin match String.sub s !offset n with
+      | s -> offset := !offset + n ; Ok s
+      | exception Invalid_argument _ -> Error (`End_of_file (String.length s))
+    end
+
 let chunk_reader_of_in_channel ich : chunk_reader =
   function
   | `Bytes num_bytes ->
@@ -240,10 +250,10 @@ let int32_of_str4 s =
  * Returns a string.
  *)
 let int_to_str4 i =
-  let s = String.create 4 in
+  let s = Bytes.create 4 in
   let mask = ones 8 in
-  s.[0] <- char_of_int (i lsr 24);
-  s.[1] <- char_of_int ((i lsr 16) land mask);
-  s.[2] <- char_of_int ((i lsr 8) land mask);
-  s.[3] <- char_of_int (i land mask);
-  s
+  Bytes.set s 0 @@ char_of_int (i lsr 24);
+  Bytes.set s 1 @@ char_of_int ((i lsr 16) land mask);
+  Bytes.set s 2 @@ char_of_int ((i lsr 8) land mask);
+  Bytes.set s 3 @@ char_of_int (i land mask);
+  Bytes.to_string s
