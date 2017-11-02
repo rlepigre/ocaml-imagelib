@@ -4,7 +4,7 @@ Pierre-Étienne Meunier (2014):
 Christophe Raffalli (2015):
   - use bigarray for better performances
 
-Romain Calascibetta (2017):
+CFCS (2017):
   - ported imagelib to his "decompress" (pure ocaml) library
   - allow for reading functions not based on in_channel (pluggable)
   - fixed several compilation warnings in early versions of OCaml
