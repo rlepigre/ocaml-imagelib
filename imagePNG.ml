@@ -247,7 +247,7 @@ module ReadPNG : ReadImage = struct
     read_signature ich;
     let ihdr_chunck = read_chunck ich in
     if ihdr_chunck.chunck_type <> "IHDR" then
-      raise (Corrupted_image "First chunck sould be of type IHDR...");
+      raise (Corrupted_image "First chunk should be of type IHDR...");
     let ihdr = data_from_ihdr ihdr_chunck.chunck_data in
     close_chunk_reader ich;
     ihdr.image_size
