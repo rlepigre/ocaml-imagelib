@@ -759,6 +759,58 @@ module ReadPNG : ReadImage = struct
                if !debug then begin
                  Printf.fprintf stderr "zTXt chunck ignored\n%!"
                end
+
+           (* Registered extension chunks *)
+           | "oFFs" ->
+               only_before curr_ctype "IDAT";
+               only_once curr_ctype;
+               (* TODO *)
+               if !debug then begin
+                 Printf.fprintf stderr "oFFs chunck ignored\n%!"
+               end
+           | "sCAL" ->
+               only_before curr_ctype "IDAT";
+               only_once curr_ctype;
+               (* TODO *)
+               if !debug then begin
+                 Printf.fprintf stderr "sCAL chunck ignored\n%!"
+               end
+           | "pCAL" ->
+               is_not_first_chunck curr_ctype;
+               only_after curr_ctype "PLTE";
+               only_before curr_ctype "IDAT";
+               only_once curr_ctype;
+               (* TODO *)
+               if !debug then begin
+                 Printf.fprintf stderr "pCAL chunck ignored\n%!"
+               end
+          | "gIFg" ->
+               (* TODO *)
+               if !debug then begin
+                 Printf.fprintf stderr "gIFg chunck ignored\n%!"
+               end
+          | "gIFx" ->
+               (* TODO *)
+               if !debug then begin
+                 Printf.fprintf stderr "gIFx chunck ignored\n%!"
+               end
+          | "gIFt" ->
+               (* Deprecated since 1998 *)
+               if !debug then begin
+                 Printf.fprintf stderr "gIFt chunck ignored\n%!"
+               end
+          | "sTER" ->
+               only_before curr_ctype "IDAT";
+               only_once curr_ctype;
+               (* TODO *)
+               if !debug then begin
+                 Printf.fprintf stderr "sTER chunck ignored\n%!"
+               end
+          | "fRAC" ->
+               (* TODO *)
+               if !debug then begin
+                 Printf.fprintf stderr "fRAC chunck ignored\n%!"
+               end
            | ch_ty  ->
                let msg = Printf.sprintf "Unknown chunck type \"%s\"..." ch_ty in
                raise (Corrupted_image msg));
