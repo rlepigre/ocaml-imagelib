@@ -8,3 +8,6 @@ CFCS (2017):
   - ported imagelib to his "decompress" (pure ocaml) library
   - allow for reading functions not based on in_channel (pluggable)
   - fixed several compilation warnings in early versions of OCaml
+
+Frédéric Fortier (2018):
+  - accept all the officially registered PNG extensions
