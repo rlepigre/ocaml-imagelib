@@ -565,225 +565,227 @@ module ReadPNG : ReadImage = struct
     let pixel_size = ref None in
 
     begin
-    try
-      while !curr_chunck.chunck_type <> "IEND" do
+      try while !curr_chunck.chunck_type <> "IEND" do
         let curr_ctype = !curr_chunck.chunck_type in
-        (match curr_ctype with
-           (* Critical chunks *)
-           | "IHDR" ->
-               only_once curr_ctype;
-               is_first_chunck curr_ctype;
-               ihdr := data_from_ihdr !curr_chunck.chunck_data;
-               if !debug then begin
-                 Printf.fprintf stderr "IHDR content:\n%!";
-                 let w, h = !ihdr.image_size in
-                 Printf.fprintf stderr
-                   "  - image size:         %ix%i\n%!" w h;
-                 Printf.fprintf stderr
-                   "  - bit depth:          %i\n%!" !ihdr.bit_depth;
-                 Printf.fprintf stderr
-                   "  - colour type:        %i\n%!" !ihdr.colour_type;
-                 Printf.fprintf stderr
-                   "  - compression_method: %i\n%!" !ihdr.compression_method;
-                 Printf.fprintf stderr
-                   "  - filter_method:      %i\n%!" !ihdr.filter_method;
-                 Printf.fprintf stderr
-                   "  - interlace_method:   %i\n%!" !ihdr.interlace_method
-               end
-           | "PLTE" ->
-               is_not_first_chunck curr_ctype;
-               only_before curr_ctype "IDAT";
-               only_once curr_ctype;
-               not_after "tRNS" curr_ctype;
-               not_after "bKGD" curr_ctype;
+        begin
+          match curr_ctype with
+          (* Critical chunks *)
+          | "IHDR" ->
+              only_once curr_ctype;
+              is_first_chunck curr_ctype;
+              ihdr := data_from_ihdr !curr_chunck.chunck_data;
+              if !debug then begin
+                Printf.fprintf stderr "IHDR content:\n%!";
+                let w, h = !ihdr.image_size in
+                Printf.fprintf stderr
+                  "  - image size:         %ix%i\n%!" w h;
+                Printf.fprintf stderr
+                  "  - bit depth:          %i\n%!" !ihdr.bit_depth;
+                Printf.fprintf stderr
+                  "  - colour type:        %i\n%!" !ihdr.colour_type;
+                Printf.fprintf stderr
+                  "  - compression_method: %i\n%!" !ihdr.compression_method;
+                Printf.fprintf stderr
+                  "  - filter_method:      %i\n%!" !ihdr.filter_method;
+                Printf.fprintf stderr
+                  "  - interlace_method:   %i\n%!" !ihdr.interlace_method
+              end
+          | "PLTE" ->
+              is_not_first_chunck curr_ctype;
+              only_before curr_ctype "IDAT";
+              only_once curr_ctype;
+              not_after "tRNS" curr_ctype;
+              not_after "bKGD" curr_ctype;
   
-               let ct = !ihdr.colour_type in
-               if ct = 0 || ct = 4
-               then begin
-                 let msg = Printf.sprintf
-                       "Chunck PLTE is forbiden for greyscale mode (%i)..." ct
-                 in raise (Corrupted_image msg);
-               end;
+              let ct = !ihdr.colour_type in
+              if ct = 0 || ct = 4
+              then begin
+                let msg = Printf.sprintf
+                      "Chunck PLTE is forbiden for greyscale mode (%i)..." ct
+                in raise (Corrupted_image msg);
+              end;
   
-               let bytes_palette = String.length !curr_chunck.chunck_data in
-               if bytes_palette mod 3 <> 0
-               then raise (Corrupted_image "Invalid palette size...");
-               let palette_length = bytes_palette / 3 in
-               if palette_length > pow_of_2 !ihdr.bit_depth
-               then begin
-                 let msg = Printf.sprintf
-                       "Maximum palette size is %i for bit depth %i.\n%!"
-                       (pow_of_2 !ihdr.bit_depth) !ihdr.bit_depth
-                 in raise (Corrupted_image msg)
-               end;
-               palette := Array.init palette_length
-                 (fun i ->
-                   { r = int_of_char !curr_chunck.chunck_data.[i * 3];
-                     g = int_of_char !curr_chunck.chunck_data.[i * 3 + 1];
-                     b = int_of_char !curr_chunck.chunck_data.[i * 3 + 2] });
-               if !debug then begin
-                 Printf.fprintf stderr "PLTE with %i lines\n%!" palette_length
-               end
-           | "IDAT" ->
-               is_not_first_chunck curr_ctype;
-               if has_read_chunck curr_ctype && last_chunck () <> curr_ctype
-               then raise (Corrupted_image
-                            "Chuncks IDAT should be consecutive...");
-               raw_idat := String.concat "" [!raw_idat; !curr_chunck.chunck_data];
-               if !debug then begin
-                 Printf.fprintf stderr "IDAT (raw data is now %i bytes long)\n%!"
-                   (String.length !raw_idat)
-               end
-           (* IEND cannot occur (end condition of the loop) *)
-           (* | "IEND" -> *)
+              let bytes_palette = String.length !curr_chunck.chunck_data in
+              if bytes_palette mod 3 <> 0
+              then raise (Corrupted_image "Invalid palette size...");
+              let palette_length = bytes_palette / 3 in
+              if palette_length > pow_of_2 !ihdr.bit_depth
+              then begin
+                let msg = Printf.sprintf
+                      "Maximum palette size is %i for bit depth %i.\n%!"
+                      (pow_of_2 !ihdr.bit_depth) !ihdr.bit_depth
+                in raise (Corrupted_image msg)
+              end;
+              palette := Array.init palette_length
+                (fun i ->
+                  { r = int_of_char !curr_chunck.chunck_data.[i * 3];
+                    g = int_of_char !curr_chunck.chunck_data.[i * 3 + 1];
+                    b = int_of_char !curr_chunck.chunck_data.[i * 3 + 2] });
+              if !debug then begin
+                Printf.fprintf stderr "PLTE with %i lines\n%!" palette_length
+              end
+          | "IDAT" ->
+              is_not_first_chunck curr_ctype;
+              if has_read_chunck curr_ctype && last_chunck () <> curr_ctype
+              then raise (Corrupted_image
+                           "Chuncks IDAT should be consecutive...");
+              raw_idat := String.concat "" [!raw_idat; !curr_chunck.chunck_data];
+              if !debug then begin
+                Printf.fprintf stderr "IDAT (raw data is now %i bytes long)\n%!"
+                  (String.length !raw_idat)
+              end
+          (* IEND cannot occur (end condition of the loop) *)
+          (* | "IEND" -> *)
 
-           (* Ancillary chunks *)
-           | "cHRM" ->
-               only_once curr_ctype;
-               is_not_first_chunck curr_ctype;
-               only_before curr_ctype "PLTE";
-               only_before curr_ctype "IDAT";
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "cHRM chunck ignored\n%!"
-               end
-           | "gAMA" ->
-               only_once curr_ctype;
-               is_not_first_chunck curr_ctype;
-               only_before curr_ctype "PLTE";
-               only_before curr_ctype "IDAT";
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "gAMA chunck ignored\n%!"
-               end
-           | "iCCP" ->
-               only_once curr_ctype;
-               is_not_first_chunck curr_ctype;
-               only_before curr_ctype "PLTE";
-               only_before curr_ctype "IDAT";
-               is_not_compatible_with curr_ctype "sRGB";
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "iCPP chunck ignored\n%!"
-               end
-           | "sBIT" ->
-               only_once curr_ctype;
-               is_not_first_chunck curr_ctype;
-               only_before curr_ctype "PLTE";
-               only_before curr_ctype "IDAT";
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "sBIT chunck ignored\n%!"
-               end
-           | "sRGB" ->
-               only_once curr_ctype;
-               is_not_first_chunck curr_ctype;
-               only_before curr_ctype "PLTE";
-               only_before curr_ctype "IDAT";
-               is_not_compatible_with curr_ctype "iCPP";
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "sRGB chunck ignored\n%!"
-               end
-           | "bKGD" ->
-               only_once curr_ctype;
-               only_before curr_ctype "IDAT";
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "bKGD chunck ignored\n%!"
-               end
-           | "hIST" ->
-               only_once curr_ctype;
-               only_after "PLTE" curr_ctype;
-               only_before curr_ctype "IDAT";
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "hIST chunck ignored\n%!"
-               end
-           | "tRNS" ->
-               only_once curr_ctype;
-               only_before curr_ctype "IDAT";
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "tRNS chunck ignored\n%!"
-               end
-           | "pHYs" ->
-               only_once curr_ctype;
-               is_not_first_chunck curr_ctype;
-               only_before curr_ctype "IDAT";
-
-               let data = !curr_chunck.chunck_data in
-               let size_x = int_of_str4 (String.sub data 0 4) in
-               let size_y = int_of_str4 (String.sub data 3 4) in
-               (match int_of_char (String.get data 8) with
+          (* Ancillary chunks *)
+          | "cHRM" ->
+              only_once curr_ctype;
+              is_not_first_chunck curr_ctype;
+              only_before curr_ctype "PLTE";
+              only_before curr_ctype "IDAT";
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "cHRM chunck ignored\n%!"
+              end
+          | "gAMA" ->
+              only_once curr_ctype;
+              is_not_first_chunck curr_ctype;
+              only_before curr_ctype "PLTE";
+              only_before curr_ctype "IDAT";
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "gAMA chunck ignored\n%!"
+              end
+          | "iCCP" ->
+              only_once curr_ctype;
+              is_not_first_chunck curr_ctype;
+              only_before curr_ctype "PLTE";
+              only_before curr_ctype "IDAT";
+              is_not_compatible_with curr_ctype "sRGB";
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "iCPP chunck ignored\n%!"
+              end
+          | "sBIT" ->
+              only_once curr_ctype;
+              is_not_first_chunck curr_ctype;
+              only_before curr_ctype "PLTE";
+              only_before curr_ctype "IDAT";
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "sBIT chunck ignored\n%!"
+              end
+          | "sRGB" ->
+              only_once curr_ctype;
+              is_not_first_chunck curr_ctype;
+              only_before curr_ctype "PLTE";
+              only_before curr_ctype "IDAT";
+              is_not_compatible_with curr_ctype "iCPP";
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "sRGB chunck ignored\n%!"
+              end
+          | "bKGD" ->
+              only_once curr_ctype;
+              only_before curr_ctype "IDAT";
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "bKGD chunck ignored\n%!"
+              end
+          | "hIST" ->
+              only_once curr_ctype;
+              only_after "PLTE" curr_ctype;
+              only_before curr_ctype "IDAT";
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "hIST chunck ignored\n%!"
+              end
+          | "tRNS" ->
+              only_once curr_ctype;
+              only_before curr_ctype "IDAT";
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "tRNS chunck ignored\n%!"
+              end
+          | "pHYs" ->
+              only_once curr_ctype;
+              is_not_first_chunck curr_ctype;
+              only_before curr_ctype "IDAT";
+              let data = !curr_chunck.chunck_data in
+              let sx = int_of_str4 (String.sub data 0 4) in
+              let sy = int_of_str4 (String.sub data 3 4) in
+              begin
+                match int_of_char (String.get data 8) with
                 | 0 -> if !debug then
-                         Printf.fprintf stderr "Aspect ratio is %i / %i\n" size_x size_y;
-                       aspect_ratio := Some (size_x , size_y) (* Unknown unit *)
+                         Printf.eprintf "Aspect ratio is %i / %i\n" sx sy;
+                       aspect_ratio := Some (sx, sy)
+                       (* Unknown unit *)
                 | 1 -> if !debug then begin
-                         Printf.fprintf stderr "Pixel size X axis: %i px/m\n" size_x;
-                         Printf.fprintf stderr "Pixel size Y axis: %i px/m\n" size_y
+                        Printf.eprintf "Pixel size X axis: %i px/m\n" sx;
+                        Printf.eprintf "Pixel size Y axis: %i px/m\n" sy
                        end;
-                       pixel_size   := Some (size_x, size_y)  (* Unit is pixel / metre *)
-                | _ ->  raise (Corrupted_image
-                                 "Unit not supported in pHYs chunk..."))
-           | "sPLT" ->
-               is_not_first_chunck curr_ctype;
-               only_before curr_ctype "IDAT";
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "sPLT chunck ignored\n%!"
-               end
-           | "tIME" ->
-               only_once curr_ctype;
-               is_not_first_chunck curr_ctype;
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "tIME chunck ignored\n%!"
-               end
-           | "iTXt" ->
-               is_not_first_chunck curr_ctype;
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "iTXt chunck ignored\n%!"
-               end
-           | "tEXt" ->
-               is_not_first_chunck curr_ctype;
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "tEXt chunck ignored\n%!";
-                 (* Printf.fprintf stderr "  \"%s\"\n%!" !curr_chunck.chunck_data *)
-               end
-           | "zTXt" ->
-               is_not_first_chunck curr_ctype;
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "zTXt chunck ignored\n%!"
-               end
+                       pixel_size    := Some (sx, sy)
+                       (* Unit is pixel / metre *)
+                | _ -> raise (Corrupted_image "Bad unit in pHYs chunk...")
+              end
+          | "sPLT" ->
+              is_not_first_chunck curr_ctype;
+              only_before curr_ctype "IDAT";
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "sPLT chunck ignored\n%!"
+              end
+          | "tIME" ->
+              only_once curr_ctype;
+              is_not_first_chunck curr_ctype;
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "tIME chunck ignored\n%!"
+              end
+          | "iTXt" ->
+              is_not_first_chunck curr_ctype;
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "iTXt chunck ignored\n%!"
+              end
+          | "tEXt" ->
+              is_not_first_chunck curr_ctype;
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "tEXt chunck ignored\n%!";
+                (* Printf.fprintf stderr "  \"%s\"\n%!" !curr_chunck.chunck_data *)
+              end
+          | "zTXt" ->
+              is_not_first_chunck curr_ctype;
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "zTXt chunck ignored\n%!"
+              end
 
-           (* Registered extension chunks *)
-           | "oFFs" ->
-               only_before curr_ctype "IDAT";
-               only_once curr_ctype;
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "oFFs chunck ignored\n%!"
-               end
-           | "sCAL" ->
-               only_before curr_ctype "IDAT";
-               only_once curr_ctype;
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "sCAL chunck ignored\n%!"
-               end
-           | "pCAL" ->
-               is_not_first_chunck curr_ctype;
-               only_after curr_ctype "PLTE";
-               only_before curr_ctype "IDAT";
-               only_once curr_ctype;
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "pCAL chunck ignored\n%!"
-               end
+          (* Registered extension chunks *)
+          | "sCAL" ->
+              only_before curr_ctype "IDAT";
+              only_once curr_ctype;
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "sCAL chunck ignored\n%!"
+              end
+          | "oFFs" ->
+              only_before curr_ctype "IDAT";
+              only_once curr_ctype;
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "oFFs chunck ignored\n%!"
+              end
+          | "pCAL" ->
+              is_not_first_chunck curr_ctype;
+              only_after curr_ctype "PLTE";
+              only_before curr_ctype "IDAT";
+              only_once curr_ctype;
+              (* TODO *)
+              if !debug then begin
+                Printf.fprintf stderr "pCAL chunck ignored\n%!"
+              end
           | "gIFg" ->
                (* TODO *)
                if !debug then begin
@@ -797,7 +799,7 @@ module ReadPNG : ReadImage = struct
           | "gIFt" ->
                (* Deprecated since 1998 *)
                if !debug then begin
-                 Printf.fprintf stderr "gIFt chunck ignored\n%!"
+                 Printf.fprintf stderr "gIFt chunck ignored (deprecated)\n%!"
                end
           | "sTER" ->
                only_before curr_ctype "IDAT";
@@ -811,21 +813,18 @@ module ReadPNG : ReadImage = struct
                if !debug then begin
                  Printf.fprintf stderr "fRAC chunck ignored\n%!"
                end
-           | ch_ty  ->
-               let msg = Printf.sprintf "Unknown chunck type \"%s\"..." ch_ty in
-               raise (Corrupted_image msg));
+          | s      ->
+               let msg = Printf.sprintf "Unknown chunck type \"%s\"..." s in
+               raise (Corrupted_image msg)
+        end;
         read_chuncks := !curr_chunck.chunck_type :: !read_chuncks;
         curr_chunck := read_chunck ich
-      done;
-      read_chuncks := "IEND" :: !read_chuncks;
-      if !debug then begin
-        Printf.fprintf stderr "IEND reached\n%!"
-      end;
-    with
-      End_of_file ->
-        (close_chunk_reader ich;
-         raise (Corrupted_image "End of file reached before chunck end..."))
+      done with End_of_file ->
+        close_chunk_reader ich;
+        raise (Corrupted_image "End of file reached before chunck end...")
     end;
+    read_chuncks := "IEND" :: !read_chuncks;
+    if !debug then Printf.eprintf "IEND reached\n%!";
 
     (* Check for trailing bytes... *)
     if (try let _ = chunk_byte ich in true with End_of_file -> false)
