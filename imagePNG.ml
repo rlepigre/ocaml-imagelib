@@ -841,6 +841,9 @@ module ReadPNG : ReadImage = struct
     let ct = !ihdr.colour_type in
     let im = !ihdr.interlace_method in
   
+    if w < 0 || h < 0 then
+      raise (Corrupted_image "One or more dimensions are negative");
+
     (* Computing number of component and byte per pixel *)
     let nb_comp = match ct with
                    | 0 -> 1 | 2 -> 3 | 3 -> 1 | 4 -> 2 | 6 -> 4
