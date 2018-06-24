@@ -174,15 +174,17 @@ module ReadPNG : ReadImage = struct
     if length > 2147483647l then
       raise (Corrupted_image "Size of chunk greater that 2^31 - 1...");
     let length = Int32.to_int length in (* FIXME unsafe for large chunks *)
-    let data = get_bytes ich (length + 4) in
-    let str_crc = get_bytes ich 4 in
-    let expected_crc = int32_of_str4 str_crc in
-    let crc = png_crc data (length + 4) in
-    if expected_crc <> crc then
-      raise (Corrupted_image "CRC error...");
-    { chunk_type = String.sub data 0 4 ;
-      chunk_data = String.sub data 4 length }
-
+    try
+      let data = get_bytes ich (length + 4) in
+      let str_crc = get_bytes ich 4 in
+      let expected_crc = int32_of_str4 str_crc in
+      let crc = png_crc data (length + 4) in
+      if expected_crc <> crc then
+        raise (Corrupted_image "CRC error...");
+      { chunk_type = String.sub data 0 4 ;
+        chunk_data = String.sub data 4 length }
+    with End_of_file ->
+      raise (Corrupted_image "Reached end of file while looking for end of chunk")
   (* Read data form the IHDR header.
    * Arguments:
    *   - s : string containing the data of the IHDR chunk.
