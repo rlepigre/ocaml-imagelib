@@ -716,8 +716,10 @@ module ReadPNG : ReadImage = struct
               is_not_first_chunk curr_ctype;
               only_before curr_ctype "IDAT";
               let data = !curr_chunk.chunk_data in
+              if String.length data <> 9 then
+                raise (Corrupted_image "Invalid pHYs chunk size");
               let sx = int_of_str4 (String.sub data 0 4) in
-              let sy = int_of_str4 (String.sub data 3 4) in
+              let sy = int_of_str4 (String.sub data 4 4) in
               begin
                 match int_of_char (String.get data 8) with
                 | 0 -> if !debug then
