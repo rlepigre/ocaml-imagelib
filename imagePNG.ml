@@ -171,8 +171,8 @@ module ReadPNG : ReadImage = struct
    *)
   let read_chunk ich =
     let length = int32_of_str4 (get_bytes ich 4) in
-    if length > 2147483647l then
-      raise (Corrupted_image "Size of chunk greater that 2^31 - 1...");
+    if length < 0l then
+      raise (Corrupted_image "Size of chunk greater than 2^31 - 1...");
     let length = Int32.to_int length in (* FIXME unsafe for large chunks *)
     try
       let data = get_bytes ich (length + 4) in
