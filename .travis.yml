@@ -10,6 +10,7 @@ env:
   - OCAML_VERSION=4.07.0+trunk
 addons:
   apt:
+    update: true
     sources:
       - avsm
     packages:
