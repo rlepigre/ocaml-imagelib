@@ -17,8 +17,7 @@ before_install:
   - export OPAMYES=1
   - export OPAMVERBOSE=1
   # Initialize the switch.
-  - opam init
-  - opam switch ${OCAML_VERSION}
+  - opam init --compiler=${OCAML_VERSION}
   - eval `opam config env`
   - opam install ocamlbuild ocamlfind decompress
   - make
