@@ -191,6 +191,8 @@ module ReadPNG : ReadImage = struct
    * Returns IHDR data.
    *)
   let data_from_ihdr s =
+    if String.length s < 13 then
+      raise (Corrupted_image "IHDR chunk is too small");
     (* FIXME problem with very wide images (more that 2^30 - 1 pixels) *)
     let image_width        = int_of_str4(String.sub s 0 4) in
     let image_height       = int_of_str4(String.sub s 4 4) in
