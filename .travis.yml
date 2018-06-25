@@ -12,7 +12,8 @@ before_install:
   # Obtain and install opam locally.
   - mkdir -p ${HOME}/bin
   - wget -O ${HOME}/bin/opam https://github.com/ocaml/opam/releases/download/2.0.0-rc3/opam-2.0.0-rc3-x86_64-linux
-  - export PATH=$PATH:{HOME}/bin
+  - chmod +x ${HOME}/bin/opam
+  - export PATH=$PATH:${HOME}/bin
   - export OPAMYES=1
   - export OPAMVERBOSE=1
   # Initialize the switch.
