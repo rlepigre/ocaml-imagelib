@@ -44,6 +44,12 @@ module ReadJPG : ReadImage = struct
     | '\xFE' -> "COM"
     | _ as c -> Printf.printf "Unknown marker %x\n" (int_of_char c); assert false
 
+  let rec find_next_marker ich handle_function =
+    match get_bytes ich 1 with
+    | "\x00" (* ignore JPEG escaped 0xFF byte *)
+    | "\xFF" -> find_next_marker ich handle_function
+    | c -> handle_function ich c.[0]
+
   (* Based on https://stackoverflow.com/a/48488655 *)
   let size ich =
     let rec handle_marker ich c =
@@ -51,7 +57,7 @@ module ReadJPG : ReadImage = struct
       match c with
       | '\x01' (* TEM *)
       | '\xD0' .. '\xD7' (* RST0-7 *)
-      | '\xD8' (* SOI *) -> find_marker ich
+      | '\xD8' (* SOI *) -> find_marker ich handle_marker
       | '\xD9' (* EOI *) -> raise Not_found
       | '\xC0' .. '\xFE' as marker (* SOF0-15, JPG, DHT, DAC *) -> (
           let len = get_bytes ich 2 |> int_of_str2_be in
@@ -63,17 +69,12 @@ module ReadJPG : ReadImage = struct
             let height = String.sub data 1 2 |> int_of_str2_be in
             let width = String.sub data 3 2 |> int_of_str2_be in
             (width, height)
-          | _ -> find_marker ich
+          | _ -> find_marker ich handle_marker
       )
-      | _ -> find_marker ich
-    and find_marker ich =
-      match get_bytes ich 1 with
-      | "\x00" (* ignore JPEG escaped 0xFF byte *)
-      | "\xFF" -> find_marker ich
-      | c -> handle_marker ich c.[0]
+      | _ -> find_marker ich handle_marker
     in
     try
-      find_marker ich
+      find_marker ich handle_marker
     with End_of_file ->
       raise (Corrupted_image "Reached end of file while looking for SOF marker")
 
