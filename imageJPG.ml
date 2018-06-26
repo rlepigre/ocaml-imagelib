@@ -29,7 +29,7 @@ module ReadJPG : ReadImage = struct
     in
     match c with
     | '\x01' -> "TEM"
-    | '\xC0' .. '\xC7' | '\xC9' .. '\xCB' | '\xCD' .. '\xCF' as c -> "SOF" ^ mask_char c 0x0F
+    | '\xC0' .. '\xC3' | '\xC5' .. '\xC7' | '\xC9' .. '\xCB' | '\xCD' .. '\xCF' as c -> "SOF" ^ mask_char c 0x0F
     | '\xD0' .. '\xD7' as c -> "RST" ^ mask_char c 0x07
     | '\xD8' -> "SOI"
     | '\xD9' -> "EOI"
@@ -53,18 +53,17 @@ module ReadJPG : ReadImage = struct
   (* Based on https://stackoverflow.com/a/48488655 *)
   let size ich =
     let rec handle_marker ich c =
-      Printf.printf "Found marker ff%x\n" (int_of_char c);
-      match c with
-      | '\x01' (* TEM *)
-      | '\xD0' .. '\xD7' (* RST0-7 *)
-      | '\xD8' (* SOI *) -> find_marker ich handle_marker
-      | '\xD9' (* EOI *) -> raise Not_found
-      | '\xC0' .. '\xFE' as marker (* SOF0-15, JPG, DHT, DAC *) -> (
+      match string_of_marker c with
+      | "TEM"
+      | "RST0" | "RST1" | "RST2" | "RST3" | "RST4" | "RST5" | "RST6" | "RST7"
+      | "SOI" -> find_marker ich handle_marker
+      | "EOI" -> raise Not_found
+      | '_ -> (
           let len = get_bytes ich 2 |> int_of_str2_be in
-          Printf.printf "  has length %d\n" len;
           let data = get_bytes ich (len - 2) in
-          match marker with
-          | '\xC0' .. '\xCF' ->
+          match string_of_marker c with
+          | "SOF0" | "SOF1"  | "SOF2"  | "SOF3"  | "SOF5"  | "SOF6"  | "SOF7"
+          | "SOF9" | "SOF10" | "SOF11" | "SOF13" | "SOF14" | "SOF15" ->
             let _precision = String.sub data 0 1 |> int_of_str1 in
             let height = String.sub data 1 2 |> int_of_str2_be in
             let width = String.sub data 3 2 |> int_of_str2_be in
