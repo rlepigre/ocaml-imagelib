@@ -110,17 +110,17 @@ module ReadJPG : ReadImage = struct
   let size ich =
     let rec handle_marker ich c =
       match string_of_marker c with
-      | "TEM"
-      | "RST0" | "RST1" | "RST2" | "RST3" | "RST4" | "RST5" | "RST6" | "RST7"
-      | "SOI" -> find_next_marker ich handle_marker
       | "EOI" -> raise Not_found
       | "SOF0" | "SOF1"  | "SOF2"  | "SOF3"  | "SOF5"  | "SOF6"  | "SOF7"
       | "SOF9" | "SOF10" | "SOF11" | "SOF13" | "SOF14" | "SOF15" ->
           let sof = parse_sof ich in
           (sof.width, sof.height)
-      | _ ->
-          let len = get_bytes ich 2 |> int_of_str2_be in
-          let _data = get_bytes ich (len - 2) in
+      | marker ->
+          let () = if not (marker_stands_alone marker) then
+            let len = get_bytes ich 2 |> int_of_str2_be in
+            let data = get_bytes ich (len - 2) in
+            ignore data
+          in
           find_next_marker ich handle_marker
     in
     try
@@ -162,7 +162,7 @@ module ReadJPG : ReadImage = struct
           only_after ich read_chunks "SOI" curr_ctype;
 
           Printf.printf "JPEG Start of Scan: TODO\n%!";
-        | _ as marker ->
+        | marker ->
           Printf.printf "Marker %s is TODO\n%!" marker;
 
           if not (marker_stands_alone marker) then
