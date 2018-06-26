@@ -44,12 +44,6 @@ module ReadJPG : ReadImage = struct
     | '\xFE' -> "COM"
     | _ as c -> Printf.printf "Unknown marker %x\n" (int_of_char c); assert false
 
-  let int_of_str1 s =
-    Char.code s.[0]
-
-  let int_of_str2 s =
-    (Char.code s.[1]) + ((Char.code s.[0]) lsl 8)
-
   (* Based on https://stackoverflow.com/a/48488655 *)
   let size ich =
     let rec handle_marker ich c =
@@ -60,14 +54,14 @@ module ReadJPG : ReadImage = struct
       | '\xD8' (* SOI *) -> find_marker ich
       | '\xD9' (* EOI *) -> raise Not_found
       | '\xC0' .. '\xFE' as marker (* SOF0-15, JPG, DHT, DAC *) -> (
-          let len = get_bytes ich 2 |> int_of_str2 in
+          let len = get_bytes ich 2 |> int_of_str2_be in
           Printf.printf "  has length %d\n" len;
           let data = get_bytes ich (len - 2) in
           match marker with
           | '\xC0' .. '\xCF' ->
             let _precision = String.sub data 0 1 |> int_of_str1 in
-            let height = String.sub data 1 2 |> int_of_str2 in
-            let width = String.sub data 3 2 |> int_of_str2 in
+            let height = String.sub data 1 2 |> int_of_str2_be in
+            let width = String.sub data 3 2 |> int_of_str2_be in
             (width, height)
           | _ -> find_marker ich
       )

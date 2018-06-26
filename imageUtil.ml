@@ -213,6 +213,27 @@ let print_byte v =
 let rec ones i = if i == 1 then 1 else ((ones (i-1)) lsl 1) lor 1 ;;
 
 (*
+ * Converts a string of size 1 into an integer.
+ * Arguments:
+ *   - s : the string.
+ * Returns an integer.
+ *)
+let int_of_str1 s =
+  assert (String.length s >= 1);
+  int_of_char s.[0]
+
+(*
+ * Converts a big-endian string of size 2 into an integer.
+ * Arguments:
+ *   - s : the string.
+ * Returns an integer.
+ *)
+let int_of_str2_be s =
+  assert (String.length s >= 2);
+  int_of_char s.[0] lsl 8 +
+  int_of_char s.[1]
+
+(*
  * Converts a string of size 4 into an integer WITHOUT taking care of
  * overflow...
  * Arguments:
@@ -220,6 +241,7 @@ let rec ones i = if i == 1 then 1 else ((ones (i-1)) lsl 1) lor 1 ;;
  * Returns an integer.
  *)
 let int_of_str4 s =
+  assert (String.length s >= 4);
   int_of_char s.[0] lsl 24 +
   int_of_char s.[1] lsl 16 +
   int_of_char s.[2] lsl 8 +
@@ -232,6 +254,7 @@ let int_of_str4 s =
  * Returns an Int32.
  *)
 let int32_of_str4 s =
+  assert (String.length s >= 4);
   let (<<) = Int32.shift_left in
   let (++) = Int32.add in
   ((Int32.of_int (int_of_char s.[0])) << 24) ++
