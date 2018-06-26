@@ -22,6 +22,23 @@ open ImageUtil
 open Image
 
 module ReadJPG : ReadImage = struct
+  let debug = ref true
+
+  type component = {
+    identifier : int;
+    h_sample_factor : int;
+    v_sample_factor : int;
+    quant_index : int;
+  }
+  
+  type sof = {
+    length : int;
+    precision : int;
+    height : int;
+    width : int;
+    components : component list;
+  }
+
   let extensions = ["jpg"; "jpeg"; "jpe"; "jif"; "jfif"; "jfi"]
 
   let string_of_marker c =
@@ -31,6 +48,8 @@ module ReadJPG : ReadImage = struct
     match c with
     | '\x01' -> "TEM"
     | '\xC0' .. '\xC3' | '\xC5' .. '\xC7' | '\xC9' .. '\xCB' | '\xCD' .. '\xCF' as c -> "SOF" ^ mask_char c 0x0F
+    | '\xC4' -> "DHT"
+    | '\xCC' -> "DAC"
     | '\xD0' .. '\xD7' as c -> "RST" ^ mask_char c 0x07
     | '\xD8' -> "SOI"
     | '\xD9' -> "EOI"
@@ -45,11 +64,47 @@ module ReadJPG : ReadImage = struct
     | '\xFE' -> "COM"
     | _ as c -> Printf.printf "Unknown marker %x\n" (int_of_char c); assert false
 
+  let marker_stands_alone = function
+    | "TEM"
+    | "RST0" | "RST1" | "RST2" | "RST3" | "RST4" | "RST5" | "RST6" | "RST7"
+    | "SOI"
+    | "EOI" -> true
+    | _ -> false
+
   let rec find_next_marker ich handle_function =
     match get_bytes ich 1 with
     | "\x00" (* ignore JPEG escaped 0xFF byte *)
     | "\xFF" -> find_next_marker ich handle_function
     | c -> handle_function ich c.[0]
+  
+  let parse_sof ich =
+    let rec parse_component ich acc = function
+      | 0 -> []
+      | count ->
+          let identifier = get_bytes ich 1 |> int_of_str1 in
+          let dims = get_bytes ich 1 |> int_of_str1 in
+          let h_sample_factor = dims land 0x0F in
+          let v_sample_factor = (dims land 0xF0) lsr 4 in
+          let quant_index = get_bytes ich 1 |> int_of_str1 in
+          if !debug then
+            Printf.printf "Component: identifier %d, h factor %d, v factor %d, quantization table index %d\n%!" identifier h_sample_factor v_sample_factor quant_index;
+          let component = {
+            identifier;
+            h_sample_factor;
+            v_sample_factor;
+            quant_index;
+          } in
+          parse_component ich (component :: acc) (count - 1)
+    in
+    let length = get_bytes ich 2 |> int_of_str2_be in
+    let precision = get_bytes ich 1 |> int_of_str1 in
+    let height = get_bytes ich 2 |> int_of_str2_be in
+    let width = get_bytes ich 2 |> int_of_str2_be in
+    let compcount = get_bytes ich 1 |> int_of_str1 in
+    if !debug then
+      Printf.printf "SOF: length %d, precision %d, height %d, width %d, component count %d\n%!" length precision height width compcount;
+    let components = parse_component ich [] compcount in
+    { length; precision; height; width; components }
 
   (* Based on https://stackoverflow.com/a/48488655 *)
   let size ich =
@@ -59,18 +114,14 @@ module ReadJPG : ReadImage = struct
       | "RST0" | "RST1" | "RST2" | "RST3" | "RST4" | "RST5" | "RST6" | "RST7"
       | "SOI" -> find_next_marker ich handle_marker
       | "EOI" -> raise Not_found
-      | _ -> (
+      | "SOF0" | "SOF1"  | "SOF2"  | "SOF3"  | "SOF5"  | "SOF6"  | "SOF7"
+      | "SOF9" | "SOF10" | "SOF11" | "SOF13" | "SOF14" | "SOF15" ->
+          let sof = parse_sof ich in
+          (sof.width, sof.height)
+      | _ ->
           let len = get_bytes ich 2 |> int_of_str2_be in
-          let data = get_bytes ich (len - 2) in
-          match string_of_marker c with
-          | "SOF0" | "SOF1"  | "SOF2"  | "SOF3"  | "SOF5"  | "SOF6"  | "SOF7"
-          | "SOF9" | "SOF10" | "SOF11" | "SOF13" | "SOF14" | "SOF15" ->
-            let _precision = String.sub data 0 1 |> int_of_str1 in
-            let height = String.sub data 1 2 |> int_of_str2_be in
-            let width = String.sub data 3 2 |> int_of_str2_be in
-            (width, height)
-          | _ -> find_next_marker ich handle_marker
-        )
+          let _data = get_bytes ich (len - 2) in
+          find_next_marker ich handle_marker
     in
     try
       find_next_marker ich handle_marker
@@ -79,45 +130,52 @@ module ReadJPG : ReadImage = struct
 
   let parsefile fn =
     let read_chunks = ref [] in
-
-    let image = create_rgb ~max_val:0 1 1 in
+    let image = ref None in
 
     let rec handle_marker ich c =
       let curr_ctype = string_of_marker c in
+      if !debug then
+        Printf.printf "Found marker %s\n%!" curr_ctype;
       try (
         match curr_ctype with
         (* Required markers *)
         | "SOI" ->
           only_once ich read_chunks curr_ctype;
-          only_before ich read_chunks curr_ctype "SOF";
-          only_before ich read_chunks curr_ctype "SOS";
+          only_before ich read_chunks "SOS" curr_ctype;
           is_first_chunk ich read_chunks curr_ctype;
         | "EOI" ->
           only_once ich read_chunks curr_ctype;
-          only_after ich read_chunks curr_ctype "SOI";
-          only_after ich read_chunks curr_ctype "SOF";
-          only_after ich read_chunks curr_ctype "SOS";
+          only_after ich read_chunks "SOI" curr_ctype;
+          only_after ich read_chunks "SOS" curr_ctype;
           is_not_first_chunk ich read_chunks curr_ctype;
 
           raise Exit
-        | "SOF" ->
+        | "SOF0" | "SOF1"  | "SOF2"  | "SOF3"  | "SOF5"  | "SOF6"  | "SOF7"
+        | "SOF9" | "SOF10" | "SOF11" | "SOF13" | "SOF14" | "SOF15" ->
           only_once ich read_chunks curr_ctype;
-          only_after ich read_chunks curr_ctype "SOI";
-          only_before ich read_chunks curr_ctype "SOS";
+          only_after ich read_chunks "SOI" curr_ctype;
+          only_before ich read_chunks "SOS" curr_ctype;
 
-          Printf.printf "JPEG Start of Frame: TODO\n%!";
+          let sof = parse_sof ich in
+          image := Some (create_rgb ~max_val:(ones sof.precision) sof.width sof.height)
         | "SOS" ->
-          only_after ich read_chunks curr_ctype "SOI";
-          only_after ich read_chunks curr_ctype "SOF";
+          only_after ich read_chunks "SOI" curr_ctype;
 
           Printf.printf "JPEG Start of Scan: TODO\n%!";
         | _ as marker ->
-          let s = Printf.sprintf "Marker %s is TODO" marker in
-          raise (Not_yet_implemented s)
+          Printf.printf "Marker %s is TODO\n%!" marker;
+
+          if not (marker_stands_alone marker) then
+            let length = get_bytes ich 2 |> int_of_str2_be in
+            let data = get_bytes ich (length - 2) in
+            ignore data
       );
         read_chunks := curr_ctype :: !read_chunks;
         find_next_marker ich handle_marker
-      with Exit -> image
+      with Exit ->
+        match !image with
+        | Some image -> image
+        | None -> raise (Corrupted_image "End-of-file reached before image data")
     in
     find_next_marker fn handle_marker
 end
