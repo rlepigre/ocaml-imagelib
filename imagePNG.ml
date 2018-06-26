@@ -17,6 +17,7 @@
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
 open Pervasives
+open ImageSequence
 open ImageUtil
 open Image
 

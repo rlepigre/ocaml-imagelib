@@ -17,6 +17,7 @@
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
 open Pervasives
+open ImageSequence
 open ImageUtil
 open Image
 
@@ -56,9 +57,9 @@ module ReadJPG : ReadImage = struct
       match string_of_marker c with
       | "TEM"
       | "RST0" | "RST1" | "RST2" | "RST3" | "RST4" | "RST5" | "RST6" | "RST7"
-      | "SOI" -> find_marker ich handle_marker
+      | "SOI" -> find_next_marker ich handle_marker
       | "EOI" -> raise Not_found
-      | '_ -> (
+      | _ -> (
           let len = get_bytes ich 2 |> int_of_str2_be in
           let data = get_bytes ich (len - 2) in
           match string_of_marker c with
@@ -68,12 +69,11 @@ module ReadJPG : ReadImage = struct
             let height = String.sub data 1 2 |> int_of_str2_be in
             let width = String.sub data 3 2 |> int_of_str2_be in
             (width, height)
-          | _ -> find_marker ich handle_marker
+          | _ -> find_next_marker ich handle_marker
       )
-      | _ -> find_marker ich handle_marker
     in
     try
-      find_marker ich handle_marker
+      find_next_marker ich handle_marker
     with End_of_file ->
       raise (Corrupted_image "Reached end of file while looking for SOF marker")
 
