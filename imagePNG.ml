@@ -489,6 +489,7 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s should not appear more than once..." ctype))
       end
     in
+
     let only_before ich read_chunks ctype ctype' =
       if List.mem ctype' !read_chunks
       then begin
@@ -498,6 +499,7 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s should appear before chunk %s..." ctype ctype'))
       end
     in
+
     let only_after ich read_chunks ctype' ctype =
       if not (List.mem ctype' !read_chunks)
       then begin
@@ -507,6 +509,7 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s should appear after chunk %s..." ctype ctype'))
       end
     in
+
     let is_first_chunk ich read_chunks ctype =
       if ([] <> !read_chunks)
       then begin
@@ -516,6 +519,7 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s can only be the first chunk..." ctype))
       end
     in
+
     let is_not_first_chunk ich read_chunks ctype =
       if ([] = !read_chunks)
       then begin
@@ -525,6 +529,7 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s cannot be the first chunk..." ctype))
       end
     in
+
     let is_not_compatible_with ich read_chunks ctype ctype' =
       if List.mem ctype' !read_chunks
       then begin
@@ -534,15 +539,17 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s is not compatible with chunk %s..." ctype ctype'))
       end
     in
+
     let last_chunk read_chunks =
       match !read_chunks with
         | []   -> "NONE"
         | x::_ -> x
     in
+
     let has_read_chunk read_chunks ctype =
       List.mem ctype !read_chunks
     in
-  
+
     let not_after ich read_chunks ctype' ctype =
       if List.mem ctype' !read_chunks
       then begin
@@ -599,7 +606,7 @@ module ReadPNG : ReadImage = struct
               only_once ich read_chunks curr_ctype;
               not_after ich read_chunks "tRNS" curr_ctype;
               not_after ich read_chunks "bKGD" curr_ctype;
-  
+
               let ct = !ihdr.colour_type in
               if ct = 0 || ct = 4
               then begin
