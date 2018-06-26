@@ -20,8 +20,31 @@ open Pervasives
 open ImageUtil
 open Image
 
+exception Corrupted_file of string
+
 module ReadJPG : ReadImage = struct
   let extensions = ["jpg"; "jpeg"; "jpe"; "jif"; "jfif"; "jfi"]
+
+  let string_of_marker c =
+    let mask_char c mask =
+      string_of_int @@ int_of_char c land mask
+    in
+    match c with
+    | '\x01' -> "TEM"
+    | '\xC0' .. '\xC7' | '\xC9' .. '\xCB' | '\xCD' .. '\xCF' as c -> "SOF" ^ mask_char c 0x0F
+    | '\xD0' .. '\xD7' as c -> "RST" ^ mask_char c 0x07
+    | '\xD8' -> "SOI"
+    | '\xD9' -> "EOI"
+    | '\xDA' -> "SOS"
+    | '\xDB' -> "DQT"
+    | '\xDC' -> "DNL"
+    | '\xDD' -> "DRI"
+    | '\xDE' -> "DHP"
+    | '\xDF' -> "EXP"
+    | '\xE0' .. '\xEF' as c -> "APP" ^ mask_char c 0x0F
+    | '\xF0' .. '\xFD' as c -> "JPG" ^ mask_char c 0x0F
+    | '\xFE' -> "COM"
+    | _ as c -> Printf.printf "Unknown marker %x\n" (int_of_char c); assert false
 
   let int_of_str1 s =
     Char.code s.[0]
@@ -53,11 +76,14 @@ module ReadJPG : ReadImage = struct
       | _ -> find_marker ich
     and find_marker ich =
       match get_bytes ich 1 with
+      | "\x00" (* ignore JPEG escaped 0xFF byte *)
       | "\xFF" -> find_marker ich
-      | c ->
-          handle_marker ich c.[0]
+      | c -> handle_marker ich c.[0]
     in
-    find_marker ich
+    try
+      find_marker ich
+    with End_of_file ->
+      raise (Corrupted_file "Reached end of file while looking for SOF marker")
 
   let parsefile fn =
     raise (Not_yet_implemented "ImageJPG.openfile") (* TODO  *)
