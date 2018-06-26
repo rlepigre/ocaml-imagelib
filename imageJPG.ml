@@ -20,8 +20,6 @@ open Pervasives
 open ImageUtil
 open Image
 
-exception Corrupted_file of string
-
 module ReadJPG : ReadImage = struct
   let extensions = ["jpg"; "jpeg"; "jpe"; "jif"; "jfif"; "jfi"]
 
@@ -83,7 +81,7 @@ module ReadJPG : ReadImage = struct
     try
       find_marker ich
     with End_of_file ->
-      raise (Corrupted_file "Reached end of file while looking for SOF marker")
+      raise (Corrupted_image "Reached end of file while looking for SOF marker")
 
   let parsefile fn =
     raise (Not_yet_implemented "ImageJPG.openfile") (* TODO  *)
