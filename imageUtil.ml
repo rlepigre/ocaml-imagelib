@@ -19,7 +19,7 @@
 
 type chunk_reader_error = [`End_of_file of int]
 type chunk_reader = ([`Bytes of int | `Close]) ->
-                    (string, chunk_reader_error) result
+  (string, chunk_reader_error) result
 
 open Pervasives
 
@@ -37,7 +37,7 @@ let get_extension fname =
   let extlen  = String.length fname - baselen - 1 in
   if extlen <= 0
   then let err = Printf.sprintf "No extension in filename '%s'." fname in
-       raise (Invalid_argument err)
+    raise (Invalid_argument err)
   else String.sub fname (baselen + 1) extlen
 
 (** [get_extension' fname] is the same as [get_extension fname] but if [fname]
@@ -60,7 +60,7 @@ let lines_from_channel ich =
       lines := l :: !lines;
       intfun ();
     with
-     | _ -> ()
+    | _ -> ()
   in
   intfun ();
   List.rev !lines
@@ -182,7 +182,7 @@ let chunk_reader_of_in_channel ich : chunk_reader =
   function
   | `Bytes num_bytes ->
     begin try Ok (really_input_string ich num_bytes)
-    with End_of_file -> Error (`End_of_file (pos_in ich))end
+      with End_of_file -> Error (`End_of_file (pos_in ich))end
   | `Close -> close_in ich; Ok ""
 
 let chunk_reader_of_path fn = chunk_reader_of_in_channel (open_in_bin fn)
@@ -276,3 +276,82 @@ let int_to_str4 i : Bytes.t =
   Bytes.set s 2 @@ char_of_int ((i lsr 8) land mask);
   Bytes.set s 3 @@ char_of_int (i land mask);
   s
+
+let only_once ich read_chunks ctype =
+  if List.mem ctype !read_chunks
+  then begin
+    let msg = Printf.sprintf
+        "Chunk %s should not appear more than once..." ctype
+    in
+    close_chunk_reader ich;
+    raise (Corrupted_image msg)
+  end
+
+let only_before ich read_chunks ctype ctype' =
+  if List.mem ctype' !read_chunks
+  then begin
+    let msg = Printf.sprintf
+        "Chunk %s should appear before chunk %s..." ctype ctype'
+    in
+    close_chunk_reader ich;
+    raise (Corrupted_image msg)
+  end
+
+let only_after ich read_chunks ctype' ctype =
+  if not (List.mem ctype' !read_chunks)
+  then begin
+    let msg = Printf.sprintf
+        "Chunk %s should appear after chunk %s..." ctype ctype'
+    in
+    close_chunk_reader ich;
+    raise (Corrupted_image msg)
+  end
+
+let is_first_chunk ich read_chunks ctype =
+  if ([] <> !read_chunks)
+  then begin
+    let msg = Printf.sprintf
+        "Chunk %s can only be the first chunk..." ctype
+    in
+    close_chunk_reader ich;
+    raise (Corrupted_image msg)
+  end
+
+let is_not_first_chunk ich read_chunks ctype =
+  if ([] = !read_chunks)
+  then begin
+    let msg = Printf.sprintf
+        "Chunk %s cannot be the first chunk..." ctype
+    in
+    close_chunk_reader ich;
+    raise (Corrupted_image msg)
+  end
+
+let is_not_compatible_with ich read_chunks ctype ctype' =
+  if List.mem ctype' !read_chunks
+  then begin
+    let msg = Printf.sprintf
+        "Chunk %s is not compatible with chunk %s..." ctype ctype'
+    in
+    close_chunk_reader ich;
+    raise (Corrupted_image msg)
+  end
+
+let last_chunk read_chunks =
+  match !read_chunks with
+  | []   -> "NONE"
+  | x::_ -> x
+
+let has_read_chunk read_chunks ctype =
+  List.mem ctype !read_chunks
+
+let not_after ich read_chunks ctype' ctype =
+  if List.mem ctype' !read_chunks
+  then begin
+    let msg = Printf.sprintf
+        "Chunk %s cannot appear after chunk %s..." ctype ctype'
+    in
+    close_chunk_reader ich;
+    raise (Corrupted_image msg)
+  end
+
