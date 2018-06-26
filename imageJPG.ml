@@ -70,7 +70,7 @@ module ReadJPG : ReadImage = struct
             let width = String.sub data 3 2 |> int_of_str2_be in
             (width, height)
           | _ -> find_next_marker ich handle_marker
-      )
+        )
     in
     try
       find_next_marker ich handle_marker
@@ -78,5 +78,46 @@ module ReadJPG : ReadImage = struct
       raise (Corrupted_image "Reached end of file while looking for SOF marker")
 
   let parsefile fn =
-    raise (Not_yet_implemented "ImageJPG.openfile") (* TODO  *)
+    let read_chunks = ref [] in
+
+    let image = create_rgb ~max_val:0 1 1 in
+
+    let rec handle_marker ich c =
+      let curr_ctype = string_of_marker c in
+      try (
+        match curr_ctype with
+        (* Required markers *)
+        | "SOI" ->
+          only_once ich read_chunks curr_ctype;
+          only_before ich read_chunks curr_ctype "SOF";
+          only_before ich read_chunks curr_ctype "SOS";
+          is_first_chunk ich read_chunks curr_ctype;
+        | "EOI" ->
+          only_once ich read_chunks curr_ctype;
+          only_after ich read_chunks curr_ctype "SOI";
+          only_after ich read_chunks curr_ctype "SOF";
+          only_after ich read_chunks curr_ctype "SOS";
+          is_not_first_chunk ich read_chunks curr_ctype;
+
+          raise Exit
+        | "SOF" ->
+          only_once ich read_chunks curr_ctype;
+          only_after ich read_chunks curr_ctype "SOI";
+          only_before ich read_chunks curr_ctype "SOS";
+
+          Printf.printf "JPEG Start of Frame: TODO\n%!";
+        | "SOS" ->
+          only_after ich read_chunks curr_ctype "SOI";
+          only_after ich read_chunks curr_ctype "SOF";
+
+          Printf.printf "JPEG Start of Scan: TODO\n%!";
+        | _ as marker ->
+          let s = Printf.sprintf "Marker %s is TODO" marker in
+          raise (Not_yet_implemented s)
+      );
+        read_chunks := curr_ctype :: !read_chunks;
+        find_next_marker ich handle_marker
+      with Exit -> image
+    in
+    find_next_marker fn handle_marker
 end
