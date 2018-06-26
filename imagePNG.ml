@@ -480,7 +480,7 @@ module ReadPNG : ReadImage = struct
     let curr_chunk = ref (read_chunk ich) in
     let read_chunks = ref [] in
 
-    let only_once ctype =
+    let only_once ich read_chunks ctype =
       if List.mem ctype !read_chunks
       then begin
         close_chunk_reader ich;
@@ -489,8 +489,7 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s should not appear more than once..." ctype))
       end
     in
-
-    let only_before ctype ctype' =
+    let only_before ich read_chunks ctype ctype' =
       if List.mem ctype' !read_chunks
       then begin
         close_chunk_reader ich;
@@ -499,8 +498,7 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s should appear before chunk %s..." ctype ctype'))
       end
     in
-
-    let only_after ctype' ctype =
+    let only_after ich read_chunks ctype' ctype =
       if not (List.mem ctype' !read_chunks)
       then begin
         close_chunk_reader ich;
@@ -509,8 +507,7 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s should appear after chunk %s..." ctype ctype'))
       end
     in
-
-    let is_first_chunk ctype =
+    let is_first_chunk ich read_chunks ctype =
       if ([] <> !read_chunks)
       then begin
         close_chunk_reader ich;
@@ -519,8 +516,7 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s can only be the first chunk..." ctype))
       end
     in
-
-    let is_not_first_chunk ctype =
+    let is_not_first_chunk ich read_chunks ctype =
       if ([] = !read_chunks)
       then begin
         close_chunk_reader ich;
@@ -529,8 +525,7 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s cannot be the first chunk..." ctype))
       end
     in
-
-    let is_not_compatible_with ctype ctype' =
+    let is_not_compatible_with ich read_chunks ctype ctype' =
       if List.mem ctype' !read_chunks
       then begin
         close_chunk_reader ich;
@@ -539,18 +534,16 @@ module ReadPNG : ReadImage = struct
                     "Chunk %s is not compatible with chunk %s..." ctype ctype'))
       end
     in
-
-    let last_chunk () =
+    let last_chunk read_chunks =
       match !read_chunks with
         | []   -> "NONE"
         | x::_ -> x
     in
-
-    let has_read_chunk ctype =
+    let has_read_chunk read_chunks ctype =
       List.mem ctype !read_chunks
     in
-
-    let not_after ctype' ctype =
+  
+    let not_after ich read_chunks ctype' ctype =
       if List.mem ctype' !read_chunks
       then begin
         close_chunk_reader ich;
@@ -581,8 +574,8 @@ module ReadPNG : ReadImage = struct
           match curr_ctype with
           (* Critical chunks *)
           | "IHDR" ->
-              only_once curr_ctype;
-              is_first_chunk curr_ctype;
+              only_once ich read_chunks curr_ctype;
+              is_first_chunk ich read_chunks curr_ctype;
               ihdr := data_from_ihdr !curr_chunk.chunk_data;
               if !debug then begin
                 Printf.fprintf stderr "IHDR content:\n%!";
@@ -601,12 +594,12 @@ module ReadPNG : ReadImage = struct
                   "  - interlace_method:   %i\n%!" !ihdr.interlace_method
               end
           | "PLTE" ->
-              is_not_first_chunk curr_ctype;
-              only_before curr_ctype "IDAT";
-              only_once curr_ctype;
-              not_after "tRNS" curr_ctype;
-              not_after "bKGD" curr_ctype;
-
+              is_not_first_chunk ich read_chunks curr_ctype;
+              only_before ich read_chunks curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
+              not_after ich read_chunks "tRNS" curr_ctype;
+              not_after ich read_chunks "bKGD" curr_ctype;
+  
               let ct = !ihdr.colour_type in
               if ct = 0 || ct = 4
               then begin
@@ -636,8 +629,8 @@ module ReadPNG : ReadImage = struct
                 Printf.fprintf stderr "PLTE with %i lines\n%!" palette_length
               end
           | "IDAT" ->
-              is_not_first_chunk curr_ctype;
-              if has_read_chunk curr_ctype && last_chunk () <> curr_ctype
+              is_not_first_chunk ich read_chunks curr_ctype;
+              if has_read_chunk read_chunks curr_ctype && last_chunk read_chunks <> curr_ctype
               then raise (Corrupted_image
                            "Chunks IDAT should be consecutive...");
               raw_idat := String.concat "" [!raw_idat; !curr_chunk.chunk_data];
@@ -650,78 +643,78 @@ module ReadPNG : ReadImage = struct
 
           (* Ancillary chunks *)
           | "cHRM" ->
-              only_once curr_ctype;
-              is_not_first_chunk curr_ctype;
-              only_before curr_ctype "PLTE";
-              only_before curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
+              only_before ich read_chunks curr_ctype "PLTE";
+              only_before ich read_chunks curr_ctype "IDAT";
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "cHRM chunk ignored\n%!"
               end
           | "gAMA" ->
-              only_once curr_ctype;
-              is_not_first_chunk curr_ctype;
-              only_before curr_ctype "PLTE";
-              only_before curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
+              only_before ich read_chunks curr_ctype "PLTE";
+              only_before ich read_chunks curr_ctype "IDAT";
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "gAMA chunk ignored\n%!"
               end
           | "iCCP" ->
-              only_once curr_ctype;
-              is_not_first_chunk curr_ctype;
-              only_before curr_ctype "PLTE";
-              only_before curr_ctype "IDAT";
-              is_not_compatible_with curr_ctype "sRGB";
+              only_once ich read_chunks curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
+              only_before ich read_chunks curr_ctype "PLTE";
+              only_before ich read_chunks curr_ctype "IDAT";
+              is_not_compatible_with ich read_chunks curr_ctype "sRGB";
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "iCPP chunk ignored\n%!"
               end
           | "sBIT" ->
-              only_once curr_ctype;
-              is_not_first_chunk curr_ctype;
-              only_before curr_ctype "PLTE";
-              only_before curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
+              only_before ich read_chunks curr_ctype "PLTE";
+              only_before ich read_chunks curr_ctype "IDAT";
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "sBIT chunk ignored\n%!"
               end
           | "sRGB" ->
-              only_once curr_ctype;
-              is_not_first_chunk curr_ctype;
-              only_before curr_ctype "PLTE";
-              only_before curr_ctype "IDAT";
-              is_not_compatible_with curr_ctype "iCPP";
+              only_once ich read_chunks curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
+              only_before ich read_chunks curr_ctype "PLTE";
+              only_before ich read_chunks curr_ctype "IDAT";
+              is_not_compatible_with ich read_chunks curr_ctype "iCPP";
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "sRGB chunk ignored\n%!"
               end
           | "bKGD" ->
-              only_once curr_ctype;
-              only_before curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
+              only_before ich read_chunks curr_ctype "IDAT";
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "bKGD chunk ignored\n%!"
               end
           | "hIST" ->
-              only_once curr_ctype;
-              only_after "PLTE" curr_ctype;
-              only_before curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
+              only_after ich read_chunks "PLTE" curr_ctype;
+              only_before ich read_chunks curr_ctype "IDAT";
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "hIST chunk ignored\n%!"
               end
           | "tRNS" ->
-              only_once curr_ctype;
-              only_before curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
+              only_before ich read_chunks curr_ctype "IDAT";
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "tRNS chunk ignored\n%!"
               end
           | "pHYs" ->
-              only_once curr_ctype;
-              is_not_first_chunk curr_ctype;
-              only_before curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
+              only_before ich read_chunks curr_ctype "IDAT";
               let data = !curr_chunk.chunk_data in
               if String.length data <> 9 then
                 raise (Corrupted_image "Invalid pHYs chunk size");
@@ -742,34 +735,34 @@ module ReadPNG : ReadImage = struct
                 | _ -> raise (Corrupted_image "Bad unit in pHYs chunk...")
               end
           | "sPLT" ->
-              is_not_first_chunk curr_ctype;
-              only_before curr_ctype "IDAT";
+              is_not_first_chunk ich read_chunks curr_ctype;
+              only_before ich read_chunks curr_ctype "IDAT";
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "sPLT chunk ignored\n%!"
               end
           | "tIME" ->
-              only_once curr_ctype;
-              is_not_first_chunk curr_ctype;
+              only_once ich read_chunks curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "tIME chunk ignored\n%!"
               end
           | "iTXt" ->
-              is_not_first_chunk curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "iTXt chunk ignored\n%!"
               end
           | "tEXt" ->
-              is_not_first_chunk curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "tEXt chunk ignored\n%!";
                 (* Printf.fprintf stderr "  \"%s\"\n%!" !curr_chunk.chunk_data *)
               end
           | "zTXt" ->
-              is_not_first_chunk curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "zTXt chunk ignored\n%!"
@@ -777,24 +770,24 @@ module ReadPNG : ReadImage = struct
 
           (* Registered extension chunks *)
           | "sCAL" ->
-              only_before curr_ctype "IDAT";
-              only_once curr_ctype;
+              only_before ich read_chunks curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "sCAL chunk ignored\n%!"
               end
           | "oFFs" ->
-              only_before curr_ctype "IDAT";
-              only_once curr_ctype;
+              only_before ich read_chunks curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "oFFs chunk ignored\n%!"
               end
           | "pCAL" ->
-              is_not_first_chunk curr_ctype;
-              only_after curr_ctype "PLTE";
-              only_before curr_ctype "IDAT";
-              only_once curr_ctype;
+              is_not_first_chunk ich read_chunks curr_ctype;
+              only_after ich read_chunks curr_ctype "PLTE";
+              only_before ich read_chunks curr_ctype "IDAT";
+              only_once ich read_chunks curr_ctype;
               (* TODO *)
               if !debug then begin
                 Printf.fprintf stderr "pCAL chunk ignored\n%!"
@@ -815,8 +808,8 @@ module ReadPNG : ReadImage = struct
                  Printf.fprintf stderr "gIFt chunk ignored (deprecated)\n%!"
                end
           | "sTER" ->
-               only_before curr_ctype "IDAT";
-               only_once curr_ctype;
+               only_before ich read_chunks curr_ctype "IDAT";
+               only_once ich read_chunks curr_ctype;
                (* TODO *)
                if !debug then begin
                  Printf.fprintf stderr "sTER chunk ignored\n%!"
