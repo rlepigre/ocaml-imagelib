@@ -33,13 +33,14 @@ module JPG = ImageJPG
 module GIF = ImageGIF
 
 let convert fn fn' =
-  let cmd = Printf.sprintf "convert %s %s" fn fn' in
-  let ret = Sys.command cmd in
-  if ret <> 0 then assert false
+  let ret =
+    Unix.create_process "convert" [| "convert"; "--" ; fn ; fn'|]
+      Unix.stdin Unix.stdout Unix.stderr in
+  if ret <> 0 then
+    raise (Failure (Printf.sprintf "convert fn:%S fn':%S failed" fn fn'))
 
 let rm fn =
-  let cmd = Printf.sprintf "rm -f %s" fn in
-  let _ = Sys.command cmd in ()
+  Sys.remove fn
 
 let warning fn msg =
   Printf.eprintf "[WARNING imagelib] file %s\n" fn;

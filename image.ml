@@ -68,9 +68,11 @@ exception Corrupted_image of string
 exception Not_yet_implemented of string
 
 let create_rgb ?(alpha=false) ?(max_val=255) width height =
-  assert (1 <= max_val && max_val <= 65535);
-  assert (width > 0);
-  assert (height > 0);
+  if not (1 <= max_val && max_val <= 65535) then
+    raise (Corrupted_image
+             "create_rgb: false: (1 <= max_val && max_val <= 65535)") ;
+  if not (width > 0 && height > 0) then
+    raise (Corrupted_image "create_rgb: width or height <= 0") ;
   let create = if max_val <= 255 then Pixmap.create8 else Pixmap.create16 in
   let pixels =
     let r = create width height in
@@ -84,9 +86,11 @@ let create_rgb ?(alpha=false) ?(max_val=255) width height =
   { width ; height ; max_val ; pixels }
 
 let create_grey ?(alpha=false) ?(max_val=255) width height =
-  assert (1 <= max_val && max_val <= 65535);
-  assert (width > 0);
-  assert (height > 0);
+  if not (1 <= max_val && max_val <= 65535) then
+    raise (Corrupted_image
+             "create_grey: false: (1 <= max_val && max_val <= 65535)") ;
+  if not (width > 0 && height > 0) then
+    raise (Corrupted_image "create_grey: width or height <= 0") ;
   let create = if max_val <= 255 then Pixmap.create8 else Pixmap.create16 in
   let pixels =
     let g = create width height in

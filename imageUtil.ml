@@ -163,10 +163,10 @@ let show_string_hex s =
 let get_bytes (reader:chunk_reader) num_bytes =
   reader (`Bytes num_bytes)
   |> function | Ok x -> x
-              | Error (`End_of_file pos) ->
+              | Error (`End_of_file _pos) ->
                 (* Printf.eprintf ("Failed to read expected "
-                          ^(string_of_int num_bytes)^" bytes at pos "
-                          ^(string_of_int pos)^" from stream") ;*)
+                          ^(string_of_int num_bytes)^" bytes at _pos "
+                          ^(string_of_int _pos)^" from stream") ;*)
                 raise End_of_file
 
 let chunk_char (reader:chunk_reader) = String.get (get_bytes reader 1) 0
