@@ -24,6 +24,30 @@ open Image
 module ReadJPG : ReadImage = struct
   let debug = ref true
 
+  (* The JPEG entropy encoder uses a zig-zag order. *)
+  let make_zigzag () =
+    let xy_to_index x y =
+      x + 8*y
+    in
+    let rec loop acc = function
+    (* (X, Y, dir (if any), moved) *)
+    (* Reached the end -> return *)
+    | (7, 7, _) ->
+        acc
+    (* Top/bottom -> go left, then southwest until we reach the edge *)
+    | (_, 0, _) | (_, 7, _) as m ->
+        let (x, y, _) = m in
+        loop (xy_to_index x y :: xy_to_index (x + 1) y :: acc) (x, y - 1, -1)
+    (* Left/right -> go down, then northeast until we reach the edge *)
+    | (0, _, _) | (7, _, _) as m ->
+        let (x, y, _) = m in
+        loop (xy_to_index x y :: xy_to_index x (y - 1) :: acc) (x + 1, y, +1)
+    (* Anything else -> keep going *)
+    | (x, y, dir) ->
+        loop (xy_to_index x y :: acc) (x + dir, y + dir, dir)
+    in
+    Array.of_list (loop [] (0, 0, 0))
+
   type component = {
     identifier : int;
     h_sample_factor : int;
