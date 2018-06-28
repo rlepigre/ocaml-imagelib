@@ -887,8 +887,8 @@ module ReadPNG : ReadImage = struct
 
          (* Removing the filter on the scanlines *)
          let prev_scanline = ref None in
-         Array.mapi
-           (fun _y (ftype, scanline) ->
+         Array.map
+           (fun (ftype, scanline) ->
              let output = unfilter ftype bpp scanline !prev_scanline in
              prev_scanline := Some output; output
            ) scanlines
@@ -901,7 +901,7 @@ module ReadPNG : ReadImage = struct
     in
 
     (* Conversion of the array of string into an array of array of int *)
-    let unfiltered_int = Array.init h (fun _y -> Array.make (w * nb_comp) 0) in
+    let unfiltered_int = Array.init h (fun _ -> Array.make (w * nb_comp) 0) in
 
     for y = 0 to h - 1 do
       for x = 0 to (w * nb_comp) - 1 do
