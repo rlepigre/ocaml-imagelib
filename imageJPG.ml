@@ -54,13 +54,26 @@ module ReadJPG : ReadImage = struct
     v_sample_factor : int;
     quant_index : int;
   }
-  
+
   type sof = {
-    length : int;
     precision : int;
     height : int;
     width : int;
-    components : component list;
+    components : component array;
+  }
+
+  type component_spec = {
+    component_index : int;
+    dc_table_index : int;
+    ac_table_index : int;
+  }
+
+  type sos = {
+    component_specs : component_spec list;
+    first_dct_component : int;
+    last_dct_component : int;
+    approx_high : int;
+    approx_low : int;
   }
 
   let extensions = ["jpg"; "jpeg"; "jpe"; "jif"; "jfif"; "jfi"]
@@ -88,6 +101,7 @@ module ReadJPG : ReadImage = struct
     | '\xFE' -> "COM"
     | _ as c -> Printf.printf "Unknown marker %x\n" (int_of_char c); assert false
 
+  (* If a marker does not have a length field, it "stands alone". *)
   let marker_stands_alone = function
     | "TEM"
     | "RST0" | "RST1" | "RST2" | "RST3" | "RST4" | "RST5" | "RST6" | "RST7"
@@ -100,35 +114,120 @@ module ReadJPG : ReadImage = struct
     | "\x00" (* ignore JPEG escaped 0xFF byte *)
     | "\xFF" -> find_next_marker ich handle_function
     | c -> handle_function ich c.[0]
-  
+
   let parse_sof ich =
     let rec parse_component ich acc = function
-      | 0 -> []
+      | 0 -> acc
       | count ->
-          let identifier = get_bytes ich 1 |> int_of_str1 in
-          let dims = get_bytes ich 1 |> int_of_str1 in
-          let h_sample_factor = dims land 0x0F in
-          let v_sample_factor = (dims land 0xF0) lsr 4 in
-          let quant_index = get_bytes ich 1 |> int_of_str1 in
-          if !debug then
-            Printf.printf "Component: identifier %d, h factor %d, v factor %d, quantization table index %d\n%!" identifier h_sample_factor v_sample_factor quant_index;
-          let component = {
-            identifier;
-            h_sample_factor;
-            v_sample_factor;
-            quant_index;
-          } in
-          parse_component ich (component :: acc) (count - 1)
+        let identifier = get_bytes ich 1 |> int_of_str1 in
+        let dims = get_bytes ich 1 |> int_of_str1 in
+        let h_sample_factor = (dims land 0xF0) lsr 4 in
+
+        if h_sample_factor = 0 || h_sample_factor > 4 then
+          raise (Corrupted_image "Horizontal sampling factor is out of bounds");
+
+        let v_sample_factor = dims land 0x0F in
+
+        if v_sample_factor = 0 || v_sample_factor > 4 then
+          raise (Corrupted_image "Vertical sampling factor is out of range");
+
+        let quant_index = get_bytes ich 1 |> int_of_str1 in
+
+        if quant_index > 4 then
+          raise (Corrupted_image "Quantisation index is out of range");
+
+        if !debug then
+          Printf.printf "Component: identifier %d, h factor %d, v factor %d, quantization table index %d\n%!" identifier h_sample_factor v_sample_factor quant_index;
+        let component = {
+          identifier;
+          h_sample_factor;
+          v_sample_factor;
+          quant_index;
+        } in
+        parse_component ich (component :: acc) (count - 1)
     in
     let length = get_bytes ich 2 |> int_of_str2_be in
     let precision = get_bytes ich 1 |> int_of_str1 in
+
+    if precision <> 8 then
+      raise (Not_yet_implemented "This decoder only supports 8-bit frame precision");
+
     let height = get_bytes ich 2 |> int_of_str2_be in
     let width = get_bytes ich 2 |> int_of_str2_be in
-    let compcount = get_bytes ich 1 |> int_of_str1 in
+
+    if width = 0 then
+      raise (Corrupted_image "Frame must be at least 1 pixel wide");
+    
+    let comp_count = get_bytes ich 1 |> int_of_str1 in
+
+    if comp_count <> 1 || comp_count <> 3 then
+      raise (Not_yet_implemented "This decoder only supports 1 or 3 component colour");
+
+    if length <> (8 + 3*comp_count) then
+      raise (Corrupted_image "Frame length does not match component count");
+
     if !debug then
-      Printf.printf "SOF: length %d, precision %d, height %d, width %d, component count %d\n%!" length precision height width compcount;
-    let components = parse_component ich [] compcount in
-    { length; precision; height; width; components }
+      Printf.printf "SOF: length %d, precision %d, height %d, width %d, component count %d\n%!" length precision height width comp_count;
+    let components = Array.of_list (parse_component ich [] comp_count) in
+    { precision; height; width; components }
+
+  let parse_sos ich =
+    let rec parse_component_spec ich acc = function
+      | 0 -> acc
+      | count ->
+        let component_index = get_bytes ich 1 |> int_of_str1 in
+        let table_indexes = get_bytes ich 1 |> int_of_str1 in
+        let dc_table_index = (table_indexes land 0xF0) lsr 4 in
+
+        if dc_table_index > 1 then
+          raise (Not_yet_implemented "Baseline decoding requires only two DC tables");
+
+        let ac_table_index = table_indexes land 0x0F in
+
+        if ac_table_index > 1 then
+          raise (Not_yet_implemented "Baseline decoding requires only two AC tabless");
+
+        if !debug then
+          Printf.printf "Component Spec: component %d, DC table %d, AC table %d\n%!" component_index dc_table_index ac_table_index;
+        let component_spec = {
+          component_index;
+          dc_table_index;
+          ac_table_index;
+        } in
+        parse_component_spec ich (component_spec :: acc) (count - 1)
+    in
+    let length = get_bytes ich 2 |> int_of_str2_be in
+    let compspeccount = get_bytes ich 1 |> int_of_str1 in
+
+    if length <> (6 + 2*compspeccount) then
+      raise (Corrupted_image "Length does not match component specifier count");
+
+    let component_specs = parse_component_spec ich [] compspeccount in
+    let first_dct_component = get_bytes ich 1 |> int_of_str1 in
+
+    if first_dct_component <> 0 then
+      raise (Not_yet_implemented "Baseline decoding requires the first DCT component to be zero.");
+
+    let last_dct_component = get_bytes ich 1 |> int_of_str1 in
+
+    if last_dct_component <> 63 then
+      raise (Not_yet_implemented "Baseline decoding requires the last DCT component to be 63");
+
+    let approx = get_bytes ich 1 |> int_of_str1 in
+    let approx_high = (approx land 0xF0) lsr 4 in
+
+    if approx_high <> 0 then
+      raise (Not_yet_implemented "Baseline decoding requires the previous point transform to be zero");
+
+    let approx_low = approx land 0x0F in
+
+    if approx_low <> 0 then
+      raise (Not_yet_implemented "Baseline decoding requires the current point transform to be zero");
+
+    if !debug then
+      Printf.printf "SOS: length %d, component spec count: %d, first DCT component: %d, last DCT component: %d, approx high: %d, approx low: %d\n%!"
+        length compspeccount first_dct_component last_dct_component approx_high approx_low;
+    { component_specs; first_dct_component; last_dct_component; approx_high; approx_low }
 
   (* Based on https://stackoverflow.com/a/48488655 *)
   let size ich =
@@ -137,15 +236,15 @@ module ReadJPG : ReadImage = struct
       | "EOI" -> raise Not_found
       | "SOF0" | "SOF1"  | "SOF2"  | "SOF3"  | "SOF5"  | "SOF6"  | "SOF7"
       | "SOF9" | "SOF10" | "SOF11" | "SOF13" | "SOF14" | "SOF15" ->
-          let sof = parse_sof ich in
-          (sof.width, sof.height)
+        let sof = parse_sof ich in
+        (sof.width, sof.height)
       | marker ->
-          let () = if not (marker_stands_alone marker) then
-            let len = get_bytes ich 2 |> int_of_str2_be in
-            let data = get_bytes ich (len - 2) in
-            ignore data
-          in
-          find_next_marker ich handle_marker
+        (if not (marker_stands_alone marker) then
+           let len = get_bytes ich 2 |> int_of_str2_be in
+           let data = get_bytes ich (len - 2) in
+           ignore data
+        );
+        find_next_marker ich handle_marker
     in
     try
       find_next_marker ich handle_marker
@@ -154,6 +253,9 @@ module ReadJPG : ReadImage = struct
 
   let parsefile fn =
     let read_chunks = ref [] in
+
+    let sof = ref None in
+    let sos = ref None in
     let image = ref None in
 
     let rec handle_marker ich c =
@@ -175,31 +277,51 @@ module ReadJPG : ReadImage = struct
 
           raise Exit
         | "SOF0" | "SOF1"  | "SOF2"  | "SOF3"  | "SOF5"  | "SOF6"  | "SOF7"
-        | "SOF9" | "SOF10" | "SOF11" | "SOF13" | "SOF14" | "SOF15" ->
+        | "SOF9" | "SOF10" | "SOF11" | "SOF13" | "SOF14" | "SOF15" as s ->
           only_once ich read_chunks curr_ctype;
           only_after ich read_chunks "SOI" curr_ctype;
           only_before ich read_chunks "SOS" curr_ctype;
 
-          let sof = parse_sof ich in
-          image := Some (create_rgb ~max_val:(ones sof.precision) sof.width sof.height)
+          (* Frames other than SOF0 have patent issues, so are (currently) unimplemented *)
+          if s = "SOF0" then
+            sof := Some (parse_sof ich); (
+              match !sof with
+              | Some sof -> (
+                Printf.printf "Number of components: %d\n%!" (Array.length sof.components);
+                (*
+                 * JPEG requires being able to decode 1-4 components, but JFIF only requires
+                 * 1 and 3 components.
+                 *)
+                match Array.length sof.components with
+                | 1 (* Y, AKA Greyscale *) ->
+                  image := Some (create_grey ~max_val:(ones sof.precision) sof.width sof.height)
+                | 3 (* YCbCr, which will be converted to RGB *) ->
+                  image := Some (create_rgb ~max_val:(ones sof.precision) sof.width sof.height)
+                | _ (* Handled in parse_sof *) -> 
+                  assert false
+              )
+              | None -> assert false
+            )
         | "SOS" ->
           only_after ich read_chunks "SOI" curr_ctype;
 
-          Printf.printf "JPEG Start of Scan: TODO\n%!";
+          sos := Some (parse_sos ich)
         | marker ->
           Printf.printf "Marker %s is TODO\n%!" marker;
 
           if not (marker_stands_alone marker) then
             let length = get_bytes ich 2 |> int_of_str2_be in
             let data = get_bytes ich (length - 2) in
+            if !debug then
+              Printf.printf "(ignoring %d bytes)\n%!" length;
             ignore data
       );
         read_chunks := curr_ctype :: !read_chunks;
         find_next_marker ich handle_marker
       with Exit ->
-        match !image with
-        | Some image -> image
-        | None -> raise (Corrupted_image "End-of-file reached before image data")
+      match !image with
+      | Some image -> image
+      | None -> raise (Corrupted_image "End-of-file reached before image data")
     in
     find_next_marker fn handle_marker
 end
