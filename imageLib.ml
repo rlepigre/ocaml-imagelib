@@ -34,7 +34,10 @@ module GIF = ImageGIF
 
 let convert fn fn' =
   let ret =
-    Unix.create_process "convert" [| "convert"; "--" ; fn ; fn'|]
+    Unix.create_process "convert" [| "convert"; fn ; fn' |]
+      (* "--" ; see:
+       https://github.com/rlepigre/ocaml-imagelib/pull/15#discussion_r198867027
+      *)
       Unix.stdin Unix.stdout Unix.stderr in
   if ret <> 0 then
     raise (Failure (Printf.sprintf "convert fn:%S fn':%S failed" fn fn'))
