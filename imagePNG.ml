@@ -989,6 +989,21 @@ module ReadPNG : ReadImage = struct
      | _ -> assert false
 end
 
+module type OUT_CHANNEL = sig
+    type out_channel
+    val output_string : out_channel -> string -> unit
+    val output_char : out_channel -> char -> unit
+end
+
+module Buffer_channel = struct
+    type out_channel = Buffer.t
+    let output_string = Buffer.add_string
+    let output_char = Buffer.add_char
+  end
+
+module PngWriter(O : OUT_CHANNEL) = struct
+open O
+
 (****************************************************************************
  * PNG writing function                                                     *
  ****************************************************************************)
@@ -1023,8 +1038,7 @@ let ihdr_to_string ihdr =
   s.[12] <- char_of_int ihdr.interlace_method;
   Bytes.to_string s
 
-let write_png fn img =
-  let och = open_out_bin fn in
+let output_png img och =
   write_signature och;
 
   let maxv = img.max_val in
@@ -1246,6 +1260,21 @@ let write_png fn img =
   in output_idat_from 0;
 
   let iend = { chunk_type = "IEND" ; chunk_data = "" } in
-  write_chunk och iend;
+  write_chunk och iend
 
-  close_out och
+end
+
+module PngWrite = PngWriter(Pervasives)
+module PngBufferWrite = PngWriter(Buffer_channel)
+
+let wrap x g f =
+  (try f x with | e -> g x; raise e);
+  g x
+
+let write_png fn img = wrap (open_out_bin fn) close_out (PngWrite.output_png img)
+
+let string_of_png img =
+  let approx_size = img.width * img.height in
+  let buf = Buffer.create approx_size in
+  PngBufferWrite.output_png img buf;
+  Buffer.contents buf
