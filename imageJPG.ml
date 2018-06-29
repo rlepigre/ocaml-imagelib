@@ -22,7 +22,7 @@ open ImageUtil
 open Image
 
 module ReadJPG : ReadImage = struct
-  let debug = ref true
+  let debug = ref false
 
   (* The JPEG entropy encoder uses a zig-zag order. *)
   let make_zigzag () =
@@ -99,7 +99,7 @@ module ReadJPG : ReadImage = struct
     | '\xE0' .. '\xEF' as c -> "APP" ^ mask_char c 0x0F
     | '\xF0' .. '\xFD' as c -> "JPG" ^ mask_char c 0x0F
     | '\xFE' -> "COM"
-    | _ as c -> Printf.printf "Unknown marker %x\n" (int_of_char c); assert false
+    | _ as c -> raise (Corrupted_image ((String.make 1 c) ^ " is not a valid marker"))
 
   (* If a marker does not have a length field, it "stands alone". *)
   let marker_stands_alone = function
@@ -185,7 +185,7 @@ module ReadJPG : ReadImage = struct
         let ac_table_index = table_indexes land 0x0F in
 
         if ac_table_index > 1 then
-          raise (Not_yet_implemented "Baseline decoding requires only two AC tabless");
+          raise (Not_yet_implemented "Baseline decoding requires only two AC tables");
 
         if !debug then
           Printf.printf "Component Spec: component %d, DC table %d, AC table %d\n%!" component_index dc_table_index ac_table_index;
@@ -261,9 +261,8 @@ module ReadJPG : ReadImage = struct
     let rec handle_marker ich c =
       let curr_ctype = string_of_marker c in
       if !debug then
-        Printf.printf "Found marker %s\n%!" curr_ctype;
-      try (
-        match curr_ctype with
+        Printf.printf "Found marker %s\n%!" curr_ctype; (
+          match curr_ctype with
         (* Required markers *)
         | "SOI" ->
           only_once ich read_chunks curr_ctype;
@@ -284,24 +283,21 @@ module ReadJPG : ReadImage = struct
 
           (* Frames other than SOF0 have patent issues, so are (currently) unimplemented *)
           if s = "SOF0" then
-            sof := Some (parse_sof ich); (
-              match !sof with
-              | Some sof -> (
-                Printf.printf "Number of components: %d\n%!" (Array.length sof.components);
+            let sof0 = parse_sof ich in
+            sof := Some sof0; (
+                Printf.printf "Number of components: %d\n%!" (Array.length sof0.components);
                 (*
                  * JPEG requires being able to decode 1-4 components, but JFIF only requires
                  * 1 and 3 components.
                  *)
-                match Array.length sof.components with
+                match Array.length sof0.components with
                 | 1 (* Y, AKA Greyscale *) ->
-                  image := Some (create_grey ~max_val:(ones sof.precision) sof.width sof.height)
+                  image := Some (create_grey ~max_val:(ones sof0.precision) sof0.width sof0.height)
                 | 3 (* YCbCr, which will be converted to RGB *) ->
-                  image := Some (create_rgb ~max_val:(ones sof.precision) sof.width sof.height)
+                  image := Some (create_rgb ~max_val:(ones sof0.precision) sof0.width sof0.height)
                 | _ (* Handled in parse_sof *) -> 
                   assert false
-              )
-              | None -> assert false
-            )
+                )
         | "SOS" ->
           only_after ich read_chunks "SOI" curr_ctype;
 
@@ -315,13 +311,14 @@ module ReadJPG : ReadImage = struct
             if !debug then
               Printf.printf "(ignoring %d bytes)\n%!" length;
             ignore data
-      );
+        );
         read_chunks := curr_ctype :: !read_chunks;
         find_next_marker ich handle_marker
-      with Exit ->
+    in
+      try
+    find_next_marker fn handle_marker
+      with Exit | End_of_file ->
       match !image with
       | Some image -> image
       | None -> raise (Corrupted_image "End-of-file reached before image data")
-    in
-    find_next_marker fn handle_marker
 end
