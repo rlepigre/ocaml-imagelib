@@ -47,7 +47,16 @@ type image =
   ; pixels  : pixmap }
 
 val create_rgb : ?alpha:bool -> ?max_val:int -> int -> int -> image
+(** [create_rgb ?alpha ?max_val width height] is an RGB image
+    of dimensions [width] * [height].
+    Raises {!Invalid_argument} if [width] or [height] are negative,
+    or if [max_val] is not in the range \[1;65535\].*)
+
 val create_grey: ?alpha:bool -> ?max_val:int -> int -> int -> image
+(** [create_rgb ?alpha ?max_val width height] is a greyscale image
+    of dimensions [width] * [height].
+    Raises {!Invalid_argument} if [width] or [height] are negative,
+    or if [max_val] is not in the range \[1;65535\].*)
 
 val read_rgba  : image -> int -> int -> (int -> int -> int -> int -> 'a) -> 'a
 val read_rgb   : image -> int -> int -> (int -> int -> int -> 'a) -> 'a

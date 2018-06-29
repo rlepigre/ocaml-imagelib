@@ -125,7 +125,7 @@ module PNG_CRC = struct
   let (>>) = Int32.shift_right_logical
   let (&)  = Int32.logand
   let (^)  = Int32.logxor
-  
+
   let crc_table =
     let elem n =
       let c = ref (Int32.of_int n) in
@@ -133,14 +133,14 @@ module PNG_CRC = struct
         c := (!c >> 1) ^ (0xedb88320l & (Int32.succ (Int32.lognot (!c & 1l))))
       done; !c
     in Array.init 256 elem
-  
+
   let update_crc crc buf len =
     let c = ref crc in
     for n = 0 to len - 1 do
       let e = Int32.of_int (int_of_char buf.[n]) in
       c := crc_table.(Int32.to_int ((!c ^ e) & 0xffl)) ^ (!c >> 8)
     done; !c
-  
+
   let png_crc buf len =
     Int32.lognot (update_crc 0xffffffffl buf len)
 end
@@ -163,7 +163,7 @@ module ReadPNG : ReadImage = struct
       (if hdr <> png_signature then
         raise (Corrupted_image "Corrupted header..."))
     else raise (Corrupted_image "Invalid PNG header...")
-  
+
   (* Read one PNG chunk, and check the CRC.
    * Arguments:
    *   - ich : input channel
@@ -171,8 +171,14 @@ module ReadPNG : ReadImage = struct
    *)
   let read_chunk ich =
     let length = int32_of_str4 (get_bytes ich 4) in
-    if length >= 2147483647l || length < 0l then
-      raise (Corrupted_image "Size of chunk greater than 2^31 - 1...");
+    let real_length_read = Int32.add length 4l in
+    if real_length_read < 4l (* <-- check for overflow*)
+    (* check that it's safe to cast to int: *)
+    || (Int32.(of_int (to_int real_length_read)) <> real_length_read)
+    (* so on x86 we can't read strings > 16 MB (...): *)
+    || Int32.to_int real_length_read > Sys.max_string_length
+    then
+      raise (Corrupted_image "Size of chunk greater than OCaml can handle...");
     let length = Int32.to_int length in (* FIXME unsafe for large chunks *)
     try
       let data = get_bytes ich (length + 4) in
@@ -196,6 +202,10 @@ module ReadPNG : ReadImage = struct
     (* FIXME problem with very wide images (more that 2^30 - 1 pixels) *)
     let image_width        = int_of_str4(String.sub s 0 4) in
     let image_height       = int_of_str4(String.sub s 4 4) in
+    if image_height < 1 || image_width < 1 then
+      raise (Corrupted_image
+               (Printf.sprintf "PNG IHDR chunk with invalid dimensions %dx%d"
+                  image_width image_height)) ;
     let bit_depth          = int_of_char s.[8] in
     let colour_type        = int_of_char s.[9] in
     let valid = match colour_type, bit_depth with
@@ -211,7 +221,7 @@ module ReadPNG : ReadImage = struct
             "Unsupported combination of colour type %X with bit depth %X..."
             colour_type bit_depth in
       raise (Corrupted_image msg)
-    end; 
+    end;
     let compression_method = int_of_char s.[10] in
     if compression_method <> 0 then begin
       let msg = Printf.sprintf
@@ -325,21 +335,22 @@ module ReadPNG : ReadImage = struct
     let col_increment = [| 8; 8; 4; 4; 2; 2; 1 |] in
     (*let block_height  = [| 8; 8; 4; 4; 2; 2; 1 |] in*)
     (*let block_width   = [| 8; 4; 4; 2; 2; 1; 1 |] in*)
-  
+
     let rowsize_bit = w * pl_bit in
     let rowsize = rowsize_bit / 8 + if rowsize_bit mod 8 <> 0 then 1 else 0 in
     let zchar = char_of_int 0 in
     let output = Array.init h (fun _ -> Bytes.make rowsize zchar) in
-  
+
     let input_byte = ref 0 in
     let input_bit = ref 0 in
-  
+
     let read_byte () =
-      assert (!input_bit = 0);
+      if !input_bit = 0 then
+        raise (Corrupted_image "PNG extract_pass: input_bit is 0") ;
       let c = String.get s !input_byte in
       incr input_byte; int_of_char c
     in
-  
+
     let read_pix str pixnum =
       if pl_bit mod 8 = 0
       then begin
@@ -349,9 +360,11 @@ module ReadPNG : ReadImage = struct
       end else begin
         let bitoffset = pl_bit * pixnum in
         let byte =
-          if bitoffset / 8 >= (String.length str) then
-            (Printf.fprintf stderr "Warning: out of bound...\n%!"; 255)
-          else int_of_char str.[bitoffset / 8]
+          if bitoffset / 8 >= (String.length str) then begin
+            if (!debug) then
+              Printf.eprintf "Warning: read_pix: bitoffset out of bound..." ;
+              255
+          end else int_of_char str.[bitoffset / 8]
         in
         let bitpos = bitoffset mod 8 in
         let mask = (ones pl_bit) lsl (8 - pl_bit) in
@@ -360,7 +373,7 @@ module ReadPNG : ReadImage = struct
         res
       end
     in
-  
+
     let read_pixel () =
       if pl_bit mod 8 = 0
       then begin
@@ -409,28 +422,28 @@ module ReadPNG : ReadImage = struct
 
     let sl = Bytes.make (w * 8) zchar in (* ugly... (2bytes x 4 component) *)
     let slpos = ref 0 in
-  
+
     for pass = 0 to 6 do
       let prevsl = ref None in
-  
+
       let row = ref starting_row.(pass) in
       while !row < h do
         let ft = ref (-1) in
-  
+
         slpos := 0;
         let col = ref starting_col.(pass) in
         while !col < w do
           if !ft < 0 then ft := read_byte ();
-  
+
           let pix = read_pixel () in
-  
+
           output_pixel pix !slpos sl;
           incr slpos;
-  
+
           col := !col + col_increment.(pass)
         done;
         flush_end_of_byte ();
-  
+
         if !ft >= 0 then begin
           let bitlen = !slpos * pl_bit in
           let sllen = bitlen / 8 + if bitlen mod 8 = 0 then 0 else 1 in
@@ -455,7 +468,7 @@ module ReadPNG : ReadImage = struct
             col := !col + col_increment.(pass)
           done;
         end;
-  
+
         row := !row + row_increment.(pass)
       done
     done;
@@ -470,90 +483,83 @@ module ReadPNG : ReadImage = struct
     let only_once ctype =
       if List.mem ctype !read_chunks
       then begin
-        let msg = Printf.sprintf
-                    "Chunk %s should not appear more than once..." ctype
-        in
         close_chunk_reader ich;
-        raise (Corrupted_image msg)
+        raise (Corrupted_image
+                 (Printf.sprintf
+                    "Chunk %s should not appear more than once..." ctype))
       end
     in
-  
+
     let only_before ctype ctype' =
       if List.mem ctype' !read_chunks
       then begin
-        let msg = Printf.sprintf
-                    "Chunk %s should appear before chunk %s..." ctype ctype'
-        in
         close_chunk_reader ich;
-        raise (Corrupted_image msg)
+        raise (Corrupted_image
+                 (Printf.sprintf
+                    "Chunk %s should appear before chunk %s..." ctype ctype'))
       end
     in
-  
+
     let only_after ctype' ctype =
       if not (List.mem ctype' !read_chunks)
       then begin
-        let msg = Printf.sprintf
-                    "Chunk %s should appear after chunk %s..." ctype ctype'
-        in
         close_chunk_reader ich;
-        raise (Corrupted_image msg)
+        raise (Corrupted_image
+                (Printf.sprintf
+                    "Chunk %s should appear after chunk %s..." ctype ctype'))
       end
     in
-  
+
     let is_first_chunk ctype =
       if ([] <> !read_chunks)
       then begin
-        let msg = Printf.sprintf
-                    "Chunk %s can only be the first chunk..." ctype
-        in
         close_chunk_reader ich;
-        raise (Corrupted_image msg)
+        raise (Corrupted_image
+                 (Printf.sprintf
+                    "Chunk %s can only be the first chunk..." ctype))
       end
     in
-  
+
     let is_not_first_chunk ctype =
       if ([] = !read_chunks)
       then begin
-        let msg = Printf.sprintf
-                    "Chunk %s cannot be the first chunk..." ctype
-        in
         close_chunk_reader ich;
-        raise (Corrupted_image msg)
+        raise (Corrupted_image
+                 (Printf.sprintf
+                    "Chunk %s cannot be the first chunk..." ctype))
       end
     in
-  
+
     let is_not_compatible_with ctype ctype' =
       if List.mem ctype' !read_chunks
       then begin
-        let msg = Printf.sprintf
-                    "Chunk %s is not compatible with chunk %s..." ctype ctype'
-        in
         close_chunk_reader ich;
-        raise (Corrupted_image msg)
+        raise (Corrupted_image
+                 (Printf.sprintf
+                    "Chunk %s is not compatible with chunk %s..." ctype ctype'))
       end
     in
-  
+
     let last_chunk () =
       match !read_chunks with
         | []   -> "NONE"
         | x::_ -> x
     in
-  
+
     let has_read_chunk ctype =
       List.mem ctype !read_chunks
     in
-  
+
     let not_after ctype' ctype =
       if List.mem ctype' !read_chunks
       then begin
-        let msg = Printf.sprintf
-                    "Chunk %s cannot appear after chunk %s..." ctype ctype'
-        in
         close_chunk_reader ich;
-        raise (Corrupted_image msg)
+        raise (Corrupted_image
+                 (Printf.sprintf
+                    "Chunk %s cannot appear after chunk %s..." ctype ctype'))
       end
     in
-  
+
     let empty_ihdr = {
       image_size         = -1 , -1;
       bit_depth          = -1;
@@ -600,7 +606,7 @@ module ReadPNG : ReadImage = struct
               only_once curr_ctype;
               not_after "tRNS" curr_ctype;
               not_after "bKGD" curr_ctype;
-  
+
               let ct = !ihdr.colour_type in
               if ct = 0 || ct = 4
               then begin
@@ -608,7 +614,7 @@ module ReadPNG : ReadImage = struct
                       "Chunk PLTE is forbiden for greyscale mode (%i)..." ct
                 in raise (Corrupted_image msg);
               end;
-  
+
               let bytes_palette = String.length !curr_chunk.chunk_data in
               if bytes_palette mod 3 <> 0
               then raise (Corrupted_image "Invalid palette size...");
@@ -616,7 +622,8 @@ module ReadPNG : ReadImage = struct
               if palette_length > pow_of_2 !ihdr.bit_depth
               then begin
                 let msg = Printf.sprintf
-                      "Maximum palette size is %i for bit depth %i.\n%!"
+                      "Palette length %d exceeds maximum palette size \
+                       %i for bit depth %i.\n%!" palette_length
                       (pow_of_2 !ihdr.bit_depth) !ihdr.bit_depth
                 in raise (Corrupted_image msg)
               end;
@@ -839,12 +846,12 @@ module ReadPNG : ReadImage = struct
     close_chunk_reader ich;
 
     let uncomp_idat = uncompress_string !raw_idat in
-  
+
     let w, h = !ihdr.image_size in
     let bd = !ihdr.bit_depth in
     let ct = !ihdr.colour_type in
     let im = !ihdr.interlace_method in
-  
+
     if w < 0 || h < 0 then
       raise (Corrupted_image "One or more dimensions are negative");
 
@@ -858,7 +865,7 @@ module ReadPNG : ReadImage = struct
                | 16 -> 2 * nb_comp
                | _  -> 1
     in
-  
+
     let unfiltered =
       match im with
        | 0 ->
@@ -867,7 +874,7 @@ module ReadPNG : ReadImage = struct
          let slen = sl_bit / 8 + if sl_bit mod 8 <> 0 then 1 else 0 in
          if !debug then
            Printf.fprintf stderr "No interlace, scanline length = %i\n%!" slen;
-  
+
          (* Building the scanlines *)
          let scanlines = Array.init h
            (fun y ->
@@ -880,8 +887,8 @@ module ReadPNG : ReadImage = struct
 
          (* Removing the filter on the scanlines *)
          let prev_scanline = ref None in
-         Array.mapi
-           (fun y (ftype, scanline) ->
+         Array.map
+           (fun (ftype, scanline) ->
              let output = unfilter ftype bpp scanline !prev_scanline in
              prev_scanline := Some output; output
            ) scanlines
@@ -889,11 +896,12 @@ module ReadPNG : ReadImage = struct
          if !debug then Printf.fprintf stderr "Interlace method 1.\n%!";
          let pixlen_bit = nb_comp * bd in
          extract_pass uncomp_idat pixlen_bit w h |> Array.map (Bytes.to_string)
-       | _ -> assert false
+       | _ -> raise (Corrupted_image
+                       "PNG: parse_file: unfiltered -> im <> (2;1)")
     in
 
     (* Conversion of the array of string into an array of array of int *)
-    let unfiltered_int = Array.init h (fun y -> Array.make (w * nb_comp) 0) in
+    let unfiltered_int = Array.init h (fun _ -> Array.make (w * nb_comp) 0) in
 
     for y = 0 to h - 1 do
       for x = 0 to (w * nb_comp) - 1 do
@@ -918,14 +926,14 @@ module ReadPNG : ReadImage = struct
                  let b = int_of_char unfiltered.(y).[ind] in
                  let v = (b mod (pow_of_2 (8 - partb))) lsr (7 - partb) in
                  Array.set unfiltered_int.(y) x v
-         | _  -> assert false
+         | _  -> raise (Corrupted_image "PNG: parse_file: bd <> [16;8;4;2;1]")
       done;
     done;
-  
+
     (* Output *)
     if !debug then Printf.fprintf stderr "Building image structure...\n%!";
     match ct with
-    | 0 -> 
+    | 0 ->
       let image = create_grey ~max_val:(ones bd) w h in
       for y = 0 to h - 1 do
         for x = 0 to w - 1 do
@@ -986,7 +994,7 @@ module ReadPNG : ReadImage = struct
        done;
        image
 
-     | _ -> assert false
+     | _ -> raise (Corrupted_image "PNG: ct <> [0;2;3;4;6]")
 end
 
 (****************************************************************************
@@ -1072,7 +1080,7 @@ let write_png fn img =
           | 5 -> byte := !byte lor (i lsl 2)
           | 6 -> byte := !byte lor (i lsl 1)
           | 7 -> byte := !byte lor i
-          | _ -> assert false);
+          | _ -> raise (Corrupted_image "PNG: !numb <> [0..7]"));
         incr numb;
         if !numb = 8 then begin
           add_byte !byte;
@@ -1096,7 +1104,7 @@ let write_png fn img =
           | 1 -> byte := !byte lor (i lsl 4)
           | 2 -> byte := !byte lor (i lsl 2)
           | 3 -> byte := !byte lor i
-          | _ -> assert false);
+          | _ -> raise (Corrupted_image "PNG: !numb <> [0..4]"));
         incr numb;
         if !numb = 4 then begin
           add_byte !byte;
@@ -1118,7 +1126,7 @@ let write_png fn img =
         (match !numb with
           | 0 -> byte := i lsl 4
           | 1 -> byte := !byte lor i
-          | _ -> assert false);
+          | _ -> raise (Corrupted_image "PNG: numb <> [0;1]"));
         incr numb;
         if !numb = 2 then begin
           add_byte !byte;
@@ -1145,7 +1153,7 @@ let write_png fn img =
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_grey img x y (fun g -> 
+          read_grey img x y (fun g ->
             add_byte (g lsr 8);
             add_byte (g land mask));
         done
@@ -1154,7 +1162,7 @@ let write_png fn img =
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-           read_greya img x y (fun g a -> 
+           read_greya img x y (fun g a ->
             add_byte g;
             add_byte a);
         done
@@ -1164,7 +1172,7 @@ let write_png fn img =
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_greya img x y (fun g a -> 
+          read_greya img x y (fun g a ->
             add_byte (g lsr 8);
             add_byte (g land mask);
             add_byte (a lsr 8);
@@ -1175,7 +1183,7 @@ let write_png fn img =
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_rgb img x y (fun r g b -> 
+          read_rgb img x y (fun r g b ->
             add_byte r;
             add_byte g;
             add_byte b);
@@ -1186,7 +1194,7 @@ let write_png fn img =
       for y = 0 to h - 1 do
         byte0 (); (* Scanline with no filter *)
         for x = 0 to w - 1 do
-          read_rgb img x y (fun r g b -> 
+          read_rgb img x y (fun r g b ->
             add_byte (r lsr 8);
             add_byte (r land mask);
             add_byte (g lsr 8);
@@ -1222,14 +1230,17 @@ let write_png fn img =
             add_byte (a land mask));
         done
       done
-    | _ -> Printf.fprintf stderr "%i\n%!" bd; assert false
+    | _ -> if (!debug) then Printf.fprintf stderr "bd: %i\n%!" bd;
+      raise (Corrupted_image "PNG: img.pixels * bd (bitdepth) mismatch")
   );
   let data = Buffer.contents buf in
   let data = compress_string data in
 
   let datalen = String.length data in
-  let max_idat_len = 1048576 in (* 2^20 sould be enough *)
-  (* FIXME constant too big for 32 bit architectures...*)
+  let max_idat_len = 1048576 in (* 2^20 should be enough *)
+  (* FIXME constant too big for 32 bit architectures...
+     maybe Sys.max_string_length
+  *)
   (*let max_idat_len = 2147483647 - 4 in (* 2^31 - 1 - 4 *)*)
   let rec output_idat_from pos =
     if datalen - pos < max_idat_len

@@ -19,17 +19,28 @@
 open Image
 
 (* [size fn] returns a couple [(w,h)] corresponding to the size of the image
-   contained in the file [fn]. The exception [Corrupted_image msg] is raised
-   in case of problem. *)
+   contained in the file [fn]. The exception [{!Corrupted_image} msg] is raised
+   in case of problem.
+   NB: This will try to run the command "convert" from imagemagick
+   to convert to PNG if the file extension is unknown.
+*)
 val size : string -> int * int
 
 (* [openfile fn] reads the image in the file [fn]. This function guesses the
-   image format using the extension, and raises [Corrupted_image msg] in
-   case of problem. *)
+   image format using the extension, and raises [{!Corrupted_image} msg] in
+   case of problem.
+   NB: If the file extension is unknown, this will launch "convert" from
+   imagemagick and attempt to convert to PNG before opening.
+*)
 val openfile : string -> Image.image
 
 (* [writefile fn img] writes the image [img] to the file [fn]. This function
-   guesses the desired format using the extension. *)
+   guesses the desired format using the extension.
+   Raises {!Corrupted_image} if it encounters a problem.
+   If the file extension is unknown to imagelib, this will first write out a PNG
+   and then convert that to the desired format using the "convert"
+   command from imagemagick.
+*)
 val writefile : string -> Image.image -> unit
 
 
