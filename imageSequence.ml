@@ -24,7 +24,7 @@ let only_once ich read_chunks ctype =
   if List.mem ctype !read_chunks
   then begin
     let msg = Printf.sprintf
-        "Chunk %s should not appear more than once..." ctype
+        "Chunk %S should not appear more than once..." ctype
     in
     close_chunk_reader ich;
     raise (Corrupted_image msg)
@@ -34,7 +34,7 @@ let only_before ich read_chunks ctype ctype' =
   if List.mem ctype' !read_chunks
   then begin
     let msg = Printf.sprintf
-        "Chunk %s should appear before chunk %s..." ctype ctype'
+        "Chunk %S should appear before chunk %S..." ctype ctype'
     in
     close_chunk_reader ich;
     raise (Corrupted_image msg)
@@ -44,7 +44,7 @@ let only_after ich read_chunks ctype' ctype =
   if not (List.mem ctype' !read_chunks)
   then begin
     let msg = Printf.sprintf
-        "Chunk %s should appear after chunk %s..." ctype ctype'
+        "Chunk %S should appear after chunk %S..." ctype ctype'
     in
     close_chunk_reader ich;
     raise (Corrupted_image msg)
@@ -54,7 +54,7 @@ let is_first_chunk ich read_chunks ctype =
   if ([] <> !read_chunks)
   then begin
     let msg = Printf.sprintf
-        "Chunk %s can only be the first chunk..." ctype
+        "Chunk %S can only be the first chunk..." ctype
     in
     close_chunk_reader ich;
     raise (Corrupted_image msg)
@@ -64,7 +64,7 @@ let is_not_first_chunk ich read_chunks ctype =
   if ([] = !read_chunks)
   then begin
     let msg = Printf.sprintf
-        "Chunk %s cannot be the first chunk..." ctype
+        "Chunk %S cannot be the first chunk..." ctype
     in
     close_chunk_reader ich;
     raise (Corrupted_image msg)
@@ -74,7 +74,7 @@ let is_not_compatible_with ich read_chunks ctype ctype' =
   if List.mem ctype' !read_chunks
   then begin
     let msg = Printf.sprintf
-        "Chunk %s is not compatible with chunk %s..." ctype ctype'
+        "Chunk %S is not compatible with chunk %S..." ctype ctype'
     in
     close_chunk_reader ich;
     raise (Corrupted_image msg)
@@ -92,10 +92,9 @@ let not_after ich read_chunks ctype' ctype =
   if List.mem ctype' !read_chunks
   then begin
     let msg = Printf.sprintf
-        "Chunk %s cannot appear after chunk %s..." ctype ctype'
+        "Chunk %S cannot appear after chunk %S..." ctype ctype'
     in
     close_chunk_reader ich;
     raise (Corrupted_image msg)
   end
-
 

@@ -129,7 +129,7 @@ module ReadJPG : ReadImage = struct
     | '\xE0' .. '\xEF' as c -> "APP" ^ mask_char c 0x0F
     | '\xF0' .. '\xFD' as c -> "JPG" ^ mask_char c 0x0F
     | '\xFE' -> "COM"
-    | _ as c -> raise (Corrupted_image ((String.make 1 c) ^ " is not a valid marker"))
+    | _ as c -> raise (Corrupted_image (Printf.sprintf "%C is not a valid marker" c))
 
   (* If a marker does not have a length field, it "stands alone". *)
   let marker_stands_alone = function
@@ -167,7 +167,8 @@ module ReadJPG : ReadImage = struct
           raise (Corrupted_image "Quantisation index is out of range");
 
         if !debug then
-          Printf.printf "Component: identifier %d, h factor %d, v factor %d, quantization table index %d\n%!" identifier h_sample_factor v_sample_factor quant_index;
+          Printf.eprintf "Component: identifier %d, h factor %d, v factor %d, quantization table index %d\n%!" identifier h_sample_factor v_sample_factor quant_index;
+        
         let component = {
           identifier;
           h_sample_factor;
@@ -197,7 +198,8 @@ module ReadJPG : ReadImage = struct
       raise (Corrupted_image "Frame length does not match component count");
 
     if !debug then
-      Printf.printf "SOF: length %d, precision %d, height %d, width %d, component count %d\n%!" length precision height width comp_count;
+      Printf.eprintf "SOF: length %d, precision %d, height %d, width %d, component count %d\n%!" length precision height width comp_count;
+    
     let components = Array.of_list (parse_component ich [] comp_count) in
     { precision; height; width; components }
 
@@ -218,7 +220,8 @@ module ReadJPG : ReadImage = struct
           raise (Not_yet_implemented "Baseline decoding requires only two AC tables");
 
         if !debug then
-          Printf.printf "Component Spec: component %d, DC table %d, AC table %d\n%!" component_index dc_table_index ac_table_index;
+          Printf.eprintf "Component Spec: component %d, DC table %d, AC table %d\n%!" component_index dc_table_index ac_table_index;
+        
         let component_spec = {
           component_index;
           dc_table_index;
@@ -318,7 +321,7 @@ module ReadJPG : ReadImage = struct
     let rec handle_marker ich c =
       let curr_ctype = string_of_marker c in
       if !debug then
-        Printf.printf "Found marker %s\n%!" curr_ctype; (
+        Printf.eprintf "Found marker %s\n%!" curr_ctype; (
         match curr_ctype with
         (* Required markers *)
         | "SOI" ->
