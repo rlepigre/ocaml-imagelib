@@ -24,26 +24,50 @@ open Image
 module ReadJPG : ReadImage = struct
   let debug = ref false
 
+  (* Source: ITU T.81 Annex K, table K.1 *)
+  let default_luminance_quantize_table =  [|
+    16; 11; 10; 16;  24;  40;  51;  61;
+    12; 12; 14; 19;  26;  58;  60;  55;
+    14; 13; 16; 24;  40;  57;  69;  56;
+    14; 17; 22; 29;  51;  87;  80;  62;
+    18; 22; 37; 56;  68; 109; 103;  77;
+    24; 35; 55; 64;  81; 104; 113;  92;
+    49; 64; 78; 87; 103; 121; 120; 101;
+    72; 92; 95; 98; 112; 100; 103;  99
+  |]
+
+  (* Source: ITU T.81 Annex K, table K.2 *)
+  let default_chrominance_quantize_table = [|
+    17; 18; 24; 47; 99; 99; 99; 99;
+    18; 21; 26; 66; 99; 99; 99; 99;
+    24; 26; 56; 99; 99; 99; 99; 99;
+    47; 66; 99; 99; 99; 99; 99; 99;
+    99; 99; 99; 99; 99; 99; 99; 99;
+    99; 99; 99; 99; 99; 99; 99; 99;
+    99; 99; 99; 99; 99; 99; 99; 99;
+    99; 99; 99; 99; 99; 99; 99; 99
+  |]
+
   (* The JPEG entropy encoder uses a zig-zag order. *)
   let make_zigzag () =
     let xy_to_index x y =
       x + 8*y
     in
     let rec loop acc = function
-    (* (X, Y, dir (if any), moved) *)
-    (* Reached the end -> return *)
-    | (7, 7, _) ->
+      (* (X, Y, dir (if any), moved) *)
+      (* Reached the end -> return *)
+      | (7, 7, _) ->
         acc
-    (* Top/bottom -> go left, then southwest until we reach the edge *)
-    | (_, 0, _) | (_, 7, _) as m ->
+      (* Top/bottom -> go left, then southwest until we reach the edge *)
+      | (_, 0, _) | (_, 7, _) as m ->
         let (x, y, _) = m in
         loop (xy_to_index x y :: xy_to_index (x + 1) y :: acc) (x, y - 1, -1)
-    (* Left/right -> go down, then northeast until we reach the edge *)
-    | (0, _, _) | (7, _, _) as m ->
+      (* Left/right -> go down, then northeast until we reach the edge *)
+      | (0, _, _) | (7, _, _) as m ->
         let (x, y, _) = m in
         loop (xy_to_index x y :: xy_to_index x (y - 1) :: acc) (x + 1, y, +1)
-    (* Anything else -> keep going *)
-    | (x, y, dir) ->
+      (* Anything else -> keep going *)
+      | (x, y, dir) ->
         loop (xy_to_index x y :: acc) (x + dir, y + dir, dir)
     in
     Array.of_list (loop [] (0, 0, 0))
@@ -60,6 +84,12 @@ module ReadJPG : ReadImage = struct
     height : int;
     width : int;
     components : component array;
+  }
+
+  type dqt = {
+    precision : int;
+    index : int;
+    entries : int array;
   }
 
   type component_spec = {
@@ -157,7 +187,7 @@ module ReadJPG : ReadImage = struct
 
     if width = 0 then
       raise (Corrupted_image "Frame must be at least 1 pixel wide");
-    
+
     let comp_count = get_bytes ich 1 |> int_of_str1 in
 
     if comp_count <> 1 || comp_count <> 3 then
@@ -229,6 +259,28 @@ module ReadJPG : ReadImage = struct
         length compspeccount first_dct_component last_dct_component approx_high approx_low;
     { component_specs; first_dct_component; last_dct_component; approx_high; approx_low }
 
+  let parse_dqt ich =
+    let rec get_qt_entries ich size acc = function
+      | 0 -> acc
+      | n ->
+        let s = get_bytes ich size in
+        if size = 2 then
+          get_qt_entries ich size (int_of_str2_be s :: acc) (n - 1)
+        else
+          get_qt_entries ich size (int_of_str1 s :: acc) (n - 1)
+    in
+    let length = get_bytes ich 2 |> int_of_str2_be in
+    (* Naming is difficult *)
+    let tmp = get_bytes ich 1 |> int_of_str1 in
+    let precision = (tmp land 0xF0) lsr 4 in
+    let index = (tmp land 0x0F) in
+    (* 
+     * NOTE: the quantization elements are specified in zig-zag order.
+     * If I screw up somewhere, maybe the table needs to be de-zig-zagged.
+     *)
+  let entries = Array.of_list (get_qt_entries ich (1 + precision) [] 64) in
+    { precision; index; entries }
+
   (* Based on https://stackoverflow.com/a/48488655 *)
   let size ich =
     let rec handle_marker ich c =
@@ -252,9 +304,14 @@ module ReadJPG : ReadImage = struct
       raise (Corrupted_image "Reached end of file while looking for SOF marker")
 
   let parsefile fn =
+    let make_dqt precision index entries =
+      { precision; index; entries }
+    in
+
     let read_chunks = ref [] in
 
     let sof = ref None in
+    let dqts = [| make_dqt 8 0 default_luminance_quantize_table; make_dqt 8 1 default_chrominance_quantize_table |] in
     let sos = ref None in
     let image = ref None in
 
@@ -262,7 +319,7 @@ module ReadJPG : ReadImage = struct
       let curr_ctype = string_of_marker c in
       if !debug then
         Printf.printf "Found marker %s\n%!" curr_ctype; (
-          match curr_ctype with
+        match curr_ctype with
         (* Required markers *)
         | "SOI" ->
           only_once ich read_chunks curr_ctype;
@@ -285,23 +342,28 @@ module ReadJPG : ReadImage = struct
           if s = "SOF0" then
             let sof0 = parse_sof ich in
             sof := Some sof0; (
-                Printf.printf "Number of components: %d\n%!" (Array.length sof0.components);
+              Printf.printf "Number of components: %d\n%!" (Array.length sof0.components);
                 (*
                  * JPEG requires being able to decode 1-4 components, but JFIF only requires
                  * 1 and 3 components.
                  *)
-                match Array.length sof0.components with
-                | 1 (* Y, AKA Greyscale *) ->
-                  image := Some (create_grey ~max_val:(ones sof0.precision) sof0.width sof0.height)
-                | 3 (* YCbCr, which will be converted to RGB *) ->
-                  image := Some (create_rgb ~max_val:(ones sof0.precision) sof0.width sof0.height)
-                | _ (* Handled in parse_sof *) -> 
-                  assert false
-                )
+              match Array.length sof0.components with
+              | 1 (* Y, AKA Greyscale *) ->
+                image := Some (create_grey ~max_val:(ones sof0.precision) sof0.width sof0.height)
+              | 3 (* YCbCr, which will be converted to RGB *) ->
+                image := Some (create_rgb ~max_val:(ones sof0.precision) sof0.width sof0.height)
+              | _ (* Handled in parse_sof *) -> 
+                assert false
+            )
         | "SOS" ->
           only_after ich read_chunks "SOI" curr_ctype;
 
           sos := Some (parse_sos ich)
+        | "DQT" ->
+          only_after ich read_chunks "SOI" curr_ctype;
+
+          let dqt = parse_dqt ich in
+          dqts.(dqt.index) <- dqt;
         | marker ->
           Printf.printf "Marker %s is TODO\n%!" marker;
 
@@ -311,14 +373,14 @@ module ReadJPG : ReadImage = struct
             if !debug then
               Printf.printf "(ignoring %d bytes)\n%!" length;
             ignore data
-        );
-        read_chunks := curr_ctype :: !read_chunks;
-        find_next_marker ich handle_marker
+      );
+      read_chunks := curr_ctype :: !read_chunks;
+      find_next_marker ich handle_marker
     in
-      try
-    find_next_marker fn handle_marker
-      with Exit | End_of_file ->
-      match !image with
-      | Some image -> image
-      | None -> raise (Corrupted_image "End-of-file reached before image data")
+    try
+      find_next_marker fn handle_marker
+    with Exit | End_of_file ->
+    match !image with
+    | Some image -> image
+    | None -> raise (Corrupted_image "End-of-file reached before image data")
 end
