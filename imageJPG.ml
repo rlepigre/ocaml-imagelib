@@ -22,10 +22,10 @@ open ImageUtil
 open Image
 
 module ReadJPG : ReadImage = struct
-  let debug = ref false
+  let debug = ref true
 
   (* Source: ITU T.81 Annex K, table K.1 *)
-  let default_luminance_quantize_table =  [|
+  let default_luminance_quantize_table = [|
     16; 11; 10; 16;  24;  40;  51;  61;
     12; 12; 14; 19;  26;  58;  60;  55;
     14; 13; 16; 24;  40;  57;  69;  56;
@@ -129,7 +129,7 @@ module ReadJPG : ReadImage = struct
     | '\xE0' .. '\xEF' as c -> "APP" ^ mask_char c 0x0F
     | '\xF0' .. '\xFD' as c -> "JPG" ^ mask_char c 0x0F
     | '\xFE' -> "COM"
-    | _ as c -> raise (Corrupted_image (Printf.sprintf "%C is not a valid marker" c))
+    | c -> raise (Corrupted_image (Printf.sprintf "%C is not a valid marker" c))
 
   (* If a marker does not have a length field, it "stands alone". *)
   let marker_stands_alone = function
@@ -258,7 +258,7 @@ module ReadJPG : ReadImage = struct
       raise (Not_yet_implemented "Baseline decoding requires the current point transform to be zero");
 
     if !debug then
-      Printf.printf "SOS: length %d, component spec count: %d, first DCT component: %d, last DCT component: %d, approx high: %d, approx low: %d\n%!"
+      Printf.eprintf "SOS: length %d, component spec count: %d, first DCT component: %d, last DCT component: %d, approx high: %d, approx low: %d\n%!"
         length compspeccount first_dct_component last_dct_component approx_high approx_low;
     { component_specs; first_dct_component; last_dct_component; approx_high; approx_low }
 
@@ -267,6 +267,10 @@ module ReadJPG : ReadImage = struct
       | 0 -> acc
       | n ->
         let s = get_bytes ich size in
+
+        if !debug then
+          Printf.eprintf "DQT%d = %S\n" n s;
+
         if size = 2 then
           get_qt_entries ich size (int_of_str2_be s :: acc) (n - 1)
         else
@@ -342,15 +346,16 @@ module ReadJPG : ReadImage = struct
           only_before ich read_chunks "SOS" curr_ctype;
 
           (* Frames other than SOF0 have patent issues, so are (currently) unimplemented *)
-          if s = "SOF0" then
+          if s = "SOF0" then (
             let sof0 = parse_sof ich in
-            sof := Some sof0; (
-              Printf.printf "Number of components: %d\n%!" (Array.length sof0.components);
-                (*
-                 * JPEG requires being able to decode 1-4 components, but JFIF only requires
-                 * 1 and 3 components.
-                 *)
-              match Array.length sof0.components with
+            sof := Some sof0;
+            if !debug then
+              Printf.eprintf "Number of components: %d\n%!" (Array.length sof0.components);
+            (*
+             * JPEG requires being able to decode 1-4 components, but JFIF only requires
+             * 1 and 3 components.
+             *)
+            match Array.length sof0.components with
               | 1 (* Y, AKA Greyscale *) ->
                 image := Some (create_grey ~max_val:(ones sof0.precision) sof0.width sof0.height)
               | 3 (* YCbCr, which will be converted to RGB *) ->
@@ -368,13 +373,14 @@ module ReadJPG : ReadImage = struct
           let dqt = parse_dqt ich in
           dqts.(dqt.index) <- dqt;
         | marker ->
-          Printf.printf "Marker %s is TODO\n%!" marker;
+          if !debug then
+            Printf.eprintf "Marker %s is TODO\n%!" marker;
 
           if not (marker_stands_alone marker) then
             let length = get_bytes ich 2 |> int_of_str2_be in
             let data = get_bytes ich (length - 2) in
             if !debug then
-              Printf.printf "(ignoring %d bytes)\n%!" length;
+              Printf.eprintf "(ignoring %d bytes)\n%!" length;
             ignore data
       );
       read_chunks := curr_ctype :: !read_chunks;

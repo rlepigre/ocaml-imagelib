@@ -36,7 +36,7 @@ let get_extension fname =
   let baselen = String.length (chop_extension' fname) in
   let extlen  = String.length fname - baselen - 1 in
   if extlen <= 0
-  then let err = Printf.sprintf "No extension in filename '%s'." fname in
+  then let err = Printf.sprintf "No extension in filename '%S'." fname in
     raise (Invalid_argument err)
   else String.sub fname (baselen + 1) extlen
 
