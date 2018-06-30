@@ -168,7 +168,7 @@ module ReadJPG : ReadImage = struct
 
         if !debug then
           Printf.eprintf "Component: identifier %d, h factor %d, v factor %d, quantization table index %d\n%!" identifier h_sample_factor v_sample_factor quant_index;
-        
+
         let component = {
           identifier;
           h_sample_factor;
@@ -199,7 +199,7 @@ module ReadJPG : ReadImage = struct
 
     if !debug then
       Printf.eprintf "SOF: length %d, precision %d, height %d, width %d, component count %d\n%!" length precision height width comp_count;
-    
+
     let components = Array.of_list (parse_component ich [] comp_count) in
     { precision; height; width; components }
 
@@ -221,7 +221,7 @@ module ReadJPG : ReadImage = struct
 
         if !debug then
           Printf.eprintf "Component Spec: component %d, DC table %d, AC table %d\n%!" component_index dc_table_index ac_table_index;
-        
+
         let component_spec = {
           component_index;
           dc_table_index;
@@ -285,7 +285,7 @@ module ReadJPG : ReadImage = struct
      * NOTE: the quantization elements are specified in zig-zag order.
      * If I screw up somewhere, maybe the table needs to be de-zig-zagged.
      *)
-  let entries = Array.of_list (get_qt_entries ich (1 + precision) [] 64) in
+    let entries = Array.of_list (get_qt_entries ich (1 + precision) [] 64) in
     { precision; index; entries }
 
   (* Based on https://stackoverflow.com/a/48488655 *)
@@ -325,8 +325,8 @@ module ReadJPG : ReadImage = struct
     let rec handle_marker ich c =
       let curr_ctype = string_of_marker c in
       if !debug then
-        Printf.eprintf "Found marker %s\n%!" curr_ctype; (
-        match curr_ctype with
+        Printf.eprintf "Found marker %s\n%!" curr_ctype;
+      begin match curr_ctype with
         (* Required markers *)
         | "SOI" ->
           only_once ich read_chunks curr_ctype;
@@ -356,13 +356,13 @@ module ReadJPG : ReadImage = struct
              * 1 and 3 components.
              *)
             match Array.length sof0.components with
-              | 1 (* Y, AKA Greyscale *) ->
-                image := Some (create_grey ~max_val:(ones sof0.precision) sof0.width sof0.height)
-              | 3 (* YCbCr, which will be converted to RGB *) ->
-                image := Some (create_rgb ~max_val:(ones sof0.precision) sof0.width sof0.height)
-              | _ (* Handled in parse_sof *) -> 
-                assert false
-            )
+            | 1 (* Y, AKA Greyscale *) ->
+              image := Some (create_grey ~max_val:(ones sof0.precision) sof0.width sof0.height)
+            | 3 (* YCbCr, which will be converted to RGB *) ->
+              image := Some (create_rgb ~max_val:(ones sof0.precision) sof0.width sof0.height)
+            | _ (* Handled in parse_sof *) -> 
+              assert false
+          )
         | "SOS" ->
           only_after ich read_chunks "SOI" curr_ctype;
 
@@ -382,7 +382,7 @@ module ReadJPG : ReadImage = struct
             if !debug then
               Printf.eprintf "(ignoring %d bytes)\n%!" length;
             ignore data
-      );
+      end;
       read_chunks := curr_ctype :: !read_chunks;
       find_next_marker ich handle_marker
     in
