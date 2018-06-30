@@ -264,7 +264,7 @@ module ReadJPG : ReadImage = struct
 
   let parse_dqt ich =
     let rec get_qt_entries ich size acc = function
-      | 0 -> acc
+      | 64 -> acc
       | n ->
         let s = get_bytes ich size in
 
@@ -272,9 +272,9 @@ module ReadJPG : ReadImage = struct
           Printf.eprintf "DQT%d = %S\n" n s;
 
         if size = 2 then
-          get_qt_entries ich size (int_of_str2_be s :: acc) (n - 1)
+          get_qt_entries ich size (int_of_str2_be s :: acc) (n + 1)
         else
-          get_qt_entries ich size (int_of_str1 s :: acc) (n - 1)
+          get_qt_entries ich size (int_of_str1 s :: acc) (n + 1)
     in
     let length = get_bytes ich 2 |> int_of_str2_be in
     (* Naming is difficult *)
@@ -285,7 +285,7 @@ module ReadJPG : ReadImage = struct
      * NOTE: the quantization elements are specified in zig-zag order.
      * If I screw up somewhere, maybe the table needs to be de-zig-zagged.
      *)
-    let entries = Array.of_list (get_qt_entries ich (1 + precision) [] 64) in
+    let entries = Array.of_list (get_qt_entries ich (1 + precision) [] 0) in
     { precision; index; entries }
 
   (* Based on https://stackoverflow.com/a/48488655 *)
