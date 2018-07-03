@@ -47,7 +47,8 @@ module PNG :
     module ReadPNG : ReadImage
 
     val write_png : string -> image -> unit
-    val string_of_png : image -> string
+
+    val bytes_of_png : image -> Bytes.t
   end
 
 module JPG :

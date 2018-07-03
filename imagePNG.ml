@@ -19,6 +19,7 @@
 open Pervasives
 open ImageUtil
 open Image
+open ImageChannels
 
 let debug = ref false
 
@@ -989,18 +990,6 @@ module ReadPNG : ReadImage = struct
      | _ -> assert false
 end
 
-module type OUT_CHANNEL = sig
-    type out_channel
-    val output_string : out_channel -> string -> unit
-    val output_char : out_channel -> char -> unit
-end
-
-module Buffer_channel = struct
-    type out_channel = Buffer.t
-    let output_string = Buffer.add_string
-    let output_char = Buffer.add_char
-  end
-
 module PngWriter(O : OUT_CHANNEL) = struct
 open O
 
@@ -1273,8 +1262,8 @@ let wrap x g f =
 
 let write_png fn img = wrap (open_out_bin fn) close_out (PngWrite.output_png img)
 
-let string_of_png img =
+let bytes_of_png img =
   let approx_size = img.width * img.height in
   let buf = Buffer.create approx_size in
   PngBufferWrite.output_png img buf;
-  Buffer.contents buf
+  Buffer.to_bytes buf
