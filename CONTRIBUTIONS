@@ -14,3 +14,6 @@ Frédéric Fortier (2018):
 
 Dan Ravensloft (2018):
   - fixed several bugs in the PNG parser
+
+Berke Durak (2018)
+  - added code for outputting PNG images to a byte sequence

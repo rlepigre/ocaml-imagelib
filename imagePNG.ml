@@ -19,6 +19,7 @@
 open Pervasives
 open ImageUtil
 open Image
+open ImageChannels
 
 let debug = ref false
 
@@ -997,6 +998,9 @@ module ReadPNG : ReadImage = struct
      | _ -> raise (Corrupted_image "PNG: ct <> [0;2;3;4;6]")
 end
 
+module PngWriter(O : OUT_CHANNEL) = struct
+open O
+
 (****************************************************************************
  * PNG writing function                                                     *
  ****************************************************************************)
@@ -1031,8 +1035,7 @@ let ihdr_to_string ihdr =
   s.[12] <- char_of_int ihdr.interlace_method;
   Bytes.to_string s
 
-let write_png fn img =
-  let och = open_out_bin fn in
+let output_png img och =
   write_signature och;
 
   let maxv = img.max_val in
@@ -1257,6 +1260,21 @@ let write_png fn img =
   in output_idat_from 0;
 
   let iend = { chunk_type = "IEND" ; chunk_data = "" } in
-  write_chunk och iend;
+  write_chunk och iend
 
-  close_out och
+end
+
+module PngWrite = PngWriter(Pervasives)
+module PngBufferWrite = PngWriter(Buffer_channel)
+
+let wrap x g f =
+  (try f x with | e -> g x; raise e);
+  g x
+
+let write_png fn img = wrap (open_out_bin fn) close_out (PngWrite.output_png img)
+
+let bytes_of_png img =
+  let approx_size = img.width * img.height in
+  let buf = Buffer.create approx_size in
+  PngBufferWrite.output_png img buf;
+  Buffer.to_bytes buf
