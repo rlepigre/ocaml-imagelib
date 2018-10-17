@@ -71,11 +71,11 @@ module PNG_Zlib = struct
       0xFFFF
     in
 
-    let window = Window.create ~proof:B.proof_bytes in
+    let window = Window.create ~witness:B.Bytes in
 
     begin match
-        Inflate.bytes input_temp output_temp
-          refill flush Inflate.(default window) with
+        Zlib_inflate.bytes input_temp output_temp
+          refill flush Zlib_inflate.(default ~witness:B.bytes window) with
     | Error _ ->
       let msg = Printf.sprintf "Decompress.Inflate.bytes failed ..." in
       raise (PNG_Zlib_error msg);
@@ -104,9 +104,9 @@ module PNG_Zlib = struct
     (* Computations<->size trade-off (see Decompress.Deflate.default): *)
     let compression_level = 4 in
 
-    let window = Deflate.default ~proof:B.proof_bytes compression_level in
+    let window = Zlib_deflate.default ~witness:B.Bytes compression_level in
 
-    begin match Deflate.bytes input_temp output_temp
+    begin match Zlib_deflate.bytes input_temp output_temp
                   refill flush window with
     | Error _ ->
       let msg = Printf.sprintf "Decompress.Deflate.bytes failed ..." in
