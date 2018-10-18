@@ -29,7 +29,7 @@ before_install:
   - opam update
   - opam switch "$OCAML_VERSION"
   - eval $(opam env)
-  - opam install ocamlbuild ocamlfind decompress.0.7
+  - opam install ocamlbuild ocamlfind decompress.0.8
 
 script:
   - make && make install
