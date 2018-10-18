@@ -20,7 +20,7 @@ Dependencies
 ------------
 List of dependencies:
  - OCaml
- - decompress (version 0.8)
+ - decompress (version 0.8.1)
  - Findlib (build)
  - OCamlbuild (build)
  - GNU Make (build)
