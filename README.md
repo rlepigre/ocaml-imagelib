@@ -1,4 +1,5 @@
-### Description ###
+The imagelib library
+====================
 
 The imagelib library implements image formats such as PNG and PPM  in
 OCaml, relying on only one external dependency: `decompress`.
@@ -12,14 +13,14 @@ Supported image formats:
  - Other formats rely on convert (imagemagick).
 
 As imagelib only requires `decompress`, it is suitable for compilation to
-javascript using js_of_ocaml (only for operations not requiring the
+javascript using `js_of_ocaml` (only for operations not requiring the
 convert binary).
 
-### Dependencies ###
-
+Dependencies
+------------
 List of dependencies:
  - OCaml
- - decompress
+ - decompress (version 0.7)
  - Findlib (build)
  - OCamlbuild (build)
  - GNU Make (build)
@@ -27,7 +28,13 @@ List of dependencies:
 Additional packages:
  - ImageMagick (convert) for handling some formats.
 
-### Installation ###
+Installation
+------------
 
- > make
- > sudo make install
+Imagelib is available on `opam` (run `opam install imagelib`). It can also
+be installed from source as follows.
+
+```bash
+make
+make install
+```
