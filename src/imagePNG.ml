@@ -130,7 +130,7 @@ module PNG_CRC = struct
   let crc_table =
     let elem n =
       let c = ref (Int32.of_int n) in
-      for k = 0 to 7 do
+      for _ = 0 to 7 do
         c := (!c >> 1) ^ (0xedb88320l & (Int32.succ (Int32.lognot (!c & 1l))))
       done; !c
     in Array.init 256 elem
@@ -417,7 +417,7 @@ module ReadPNG : ReadImage = struct
         let content = int_of_char @@ Bytes.get str byte in
         let mask = lnot (((ones pl_bit) lsl (8 - pl_bit)) lsr bit) in
         let newcontent = (content land mask) lor (pixv lsr bit) in
-        str.[byte] <- char_of_int newcontent;
+        Bytes.set str byte (char_of_int newcontent)
       end
     in
 
@@ -452,7 +452,7 @@ module ReadPNG : ReadImage = struct
             let nbbits = bitlen mod 8 in
             let mask = ones nbbits lsl (8 - nbbits) in
             let last = int_of_char @@ Bytes.get sl (sllen - 1) in
-            sl.[sllen - 1] <- char_of_int (last land mask)
+            Bytes.set sl (sllen - 1) (char_of_int (last land mask))
           end;
           let sl = Bytes.sub sl 0 sllen in
           let bpp = max (pl_bit / 8) 1 in
@@ -1028,11 +1028,11 @@ let ihdr_to_string ihdr =
   let s = Bytes.create 13 in
   Bytes.blit (int_to_str4 (fst ihdr.image_size)) 0 s 0 4;
   Bytes.blit (int_to_str4 (snd ihdr.image_size)) 0 s 4 4;
-  s.[8] <- char_of_int ihdr.bit_depth;
-  s.[9] <- char_of_int ihdr.colour_type;
-  s.[10] <- char_of_int ihdr.compression_method;
-  s.[11] <- char_of_int ihdr.filter_method;
-  s.[12] <- char_of_int ihdr.interlace_method;
+  Bytes.set s 8  (char_of_int ihdr.bit_depth);
+  Bytes.set s 9  (char_of_int ihdr.colour_type);
+  Bytes.set s 10 (char_of_int ihdr.compression_method);
+  Bytes.set s 11 (char_of_int ihdr.filter_method);
+  Bytes.set s 12 (char_of_int ihdr.interlace_method);
   Bytes.to_string s
 
 let output_png img och =

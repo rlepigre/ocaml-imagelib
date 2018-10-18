@@ -72,6 +72,6 @@ module ReadGIF : ReadImage = struct
     ImageUtil.close_chunk_reader ich;
     hdr.image_size
 
-  let parsefile fn =
+  let parsefile _ =
     raise (Not_yet_implemented "ImageGIF.openfile") (* TODO  *)
 end

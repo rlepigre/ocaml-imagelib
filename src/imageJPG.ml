@@ -73,7 +73,7 @@ module ReadJPG : ReadImage = struct
                      then (m - 0xc0, d)
                      else find_SOF bs
     in
-    let (n, sof) = find_SOF headers in
+    let (_, sof) = find_SOF headers in
     (*
     Printf.fprintf stderr "SOF%i: " n;
     show_string_hex sof;
@@ -82,6 +82,6 @@ module ReadJPG : ReadImage = struct
     let width = ((int_of_char sof.[3]) lsl 8) lor (int_of_char sof.[4]) in
     width, height
 
-  let parsefile fn =
+  let parsefile _ =
     raise (Not_yet_implemented "ImageJPG.openfile") (* TODO  *)
 end

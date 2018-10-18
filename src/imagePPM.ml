@@ -19,7 +19,6 @@
 open Pervasives
 open ImageUtil
 open Image
-open Bigarray
 
 module ReadPPM : ReadImage = struct
   (*
@@ -30,13 +29,6 @@ module ReadPPM : ReadImage = struct
    *   - pnm : portable anymap format
    *)
   let extensions = ["ppm"; "pgm"; "pbm"; "pnm"]
-
-  let count_line str =
-    let r = ref 0 in
-    for i = 0 to String.length str - 1 do
-      if str.[i] = '\n' then incr r
-    done;
-    !r
 
   let read_header (content:chunk_reader) =
     let magic = ref "" in

@@ -1,6 +1,0 @@
-(jbuild_version 1)
-
-(library
- ((name imagelib2)
-  (libraries (decompress))
-  (wrapped true)))
