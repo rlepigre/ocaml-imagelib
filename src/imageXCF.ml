@@ -69,6 +69,6 @@ module ReadXCF : ReadImage = struct
     close_chunk_reader ich;
     hdr.image_size
 
-  let parsefile fn =
+  let parsefile _ =
     raise (Not_yet_implemented "ImageXCF.openfile") (* TODO  *)
 end

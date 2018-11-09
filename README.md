@@ -19,10 +19,9 @@ convert binary).
 Dependencies
 ------------
 List of dependencies:
- - OCaml
+ - OCaml (at least 4.03.0)
+ - dune (at least 1.2.0)
  - decompress (version 0.8.1)
- - Findlib (build)
- - OCamlbuild (build)
  - GNU Make (build)
 
 Additional packages:
