@@ -1,0 +1,8 @@
+(library
+ (name imagelib_unix)
+ (public_name imagelib-unix)
+ (synopsis "Image library with unix bindings")
+ (modules :standard)
+ (flags (:standard -safe-string))
+ (wrapped false)
+ (libraries imagelib))

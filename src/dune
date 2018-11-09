@@ -3,5 +3,6 @@
  (public_name imagelib)
  (synopsis "Image library")
  (modules :standard)
+ (flags (:standard -safe-string))
  (wrapped false)
  (libraries bigarray decompress))

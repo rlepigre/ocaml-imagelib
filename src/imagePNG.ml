@@ -16,7 +16,6 @@
  *
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
-open Pervasives
 open ImageUtil
 open Image
 open ImageChannels
@@ -52,8 +51,7 @@ module PNG_Zlib = struct
   open Decompress
 
   let uncompress_string (input_ro:string) : string =
-    let inputstr = Bytes.of_string input_ro in
-    let len = Bytes.length inputstr in
+    let len = String.length input_ro in
     let inputpos = ref 0 in
     let input_temp, output_temp = Bytes.(create 0xFFFF, create 0xFFFF) in
     let final_output = Buffer.create (len / 3) in (* approx avg rate *)
@@ -61,7 +59,7 @@ module PNG_Zlib = struct
     let refill (strbuf:Bytes.t) : int =
       let remaining = len - !inputpos in
       let tocopy = min 0xFFFF remaining in
-      Bytes.blit inputstr !inputpos strbuf 0 tocopy;
+      Bytes.blit_string input_ro !inputpos strbuf 0 tocopy;
       inputpos := !inputpos + tocopy;
       tocopy
     in
@@ -1264,17 +1262,17 @@ let output_png img och =
 
 end
 
-module PngWrite = PngWriter(Pervasives)
+module PngWrite = PngWriter(Chunk_channel)
 module PngBufferWrite = PngWriter(Buffer_channel)
 
-let wrap x g f =
-  (try f x with | e -> g x; raise e);
-  g x
-
-let write_png fn img = wrap (open_out_bin fn) close_out (PngWrite.output_png img)
+let write_png och img =
+  PngWrite.output_png img och
 
 let bytes_of_png img =
   let approx_size = img.width * img.height in
   let buf = Buffer.create approx_size in
   PngBufferWrite.output_png img buf;
-  Buffer.to_bytes buf
+  (* Do this instead of Buffer.to_bytes to avoid copying
+     since the underlying string backing the Buffer.to_bytes
+     does not escape this scope: *)
+  Bytes.unsafe_of_string (Buffer.contents buf)

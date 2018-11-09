@@ -1,0 +1,39 @@
+synopsis: "The imagelib library implements image formats such as PNG and PPM"
+description:
+"""
+The imagelib library implements image formats such as PNG and PPM
+
+The imagelib library implements image formats such as PNG and PPM in
+OCaml, relying on only one external dependency: 'decompress'.
+
+Supported image formats:
+ - PNG (full implementation of RFC 2083),
+ - PPM, PGM, PBM, ... (fully supported),
+ - JPG (only image size natively, conversion to PNG otherwise),
+ - GIF (only image size natively, conversion to PNG otherwise),
+ - XCF (only image size natively, conversion to PNG otherwise),
+ - Other formats rely on 'convert' (imagemagick).
+
+As imagelib only requires 'decompress', it can be used together with
+js_of_ocaml to compile projects to Javascript. Note that some of the
+features of imagelib require the convert binary  (and thus cannot be
+used from Javascript).
+"""
+opam-version: "2.0"
+maintainer: "rodolphe.lepigre@inria.fr"
+bug-reports: "https://github.com/rlepigre/imagelib/issues"
+homepage: "https://github.com/rlepigre/imagelib"
+dev-repo: "git+https://github.com/rlepigre/imagelib.git"
+authors: [
+  "Rodolphe Lepigre <rodolphe.lepigre@inria.fr>"
+]
+license: "GPLv3"
+doc: "https://github.com/rlepigre/imagelib"
+
+depends: [
+  "ocaml"        {         >= "4.03.0" }
+  "dune"         { build & >= "1.3.0"  }
+  "imagelib"
+]
+
+build: [ [ "dune" "build" "-p" name "-j" jobs ] ]

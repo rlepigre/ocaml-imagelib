@@ -16,9 +16,9 @@
  *
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
-open Filename
+
 open Image
-open ImageUtil
+(*open ImageUtil*)
 
 open ImagePNG
 open ImagePPM
@@ -34,27 +34,8 @@ module JPG = ImageJPG
 module GIF = ImageGIF
 module BMP = ImageBMP
 
-let convert fn fn' =
-  let ret =
-    Unix.create_process "convert" [| "convert"; fn ; fn' |]
-      (* "--" ; see:
-       https://github.com/rlepigre/ocaml-imagelib/pull/15#discussion_r198867027
-      *)
-      Unix.stdin Unix.stdout Unix.stderr in
-  if ret <> 0 then
-    raise (Failure (Printf.sprintf "convert fn:%S fn':%S failed" fn fn'))
-
-let rm fn =
-  Sys.remove fn
-
-let warning fn msg =
-  Printf.eprintf "[WARNING imagelib] file %s\n" fn;
-  Printf.eprintf "  %s\n" msg;
-  Printf.eprintf "  PNG is the prefered format!\n%!"
-
-let size fn =
-  let ext = String.lowercase_ascii (get_extension' fn) in
-  let ich = chunk_reader_of_path fn in
+let size ~extension ich =
+  let ext = String.lowercase_ascii extension in
   if List.mem ext ReadPNG.extensions
   then ReadPNG.size ich else
   if List.mem ext ReadPPM.extensions
@@ -67,43 +48,22 @@ let size fn =
   then ReadGIF.size ich else
   if List.mem ext ReadBMP.extensions
   then ReadBMP.size ich else
-  begin
-    warning fn "No support for image size...";
-    let fn' = temp_file "image" ".png" in
-    convert fn fn';
-    let ich' = chunk_reader_of_path fn' in
-    let sz = ReadPNG.size ich' in
-    rm fn'; sz
-  end
+    raise (Not_yet_implemented ext)
 
-let openfile fn : image =
-  let ext = String.lowercase_ascii (get_extension' fn) in
-  let ich = chunk_reader_of_path fn in
+let openfile ~extension ich : image =
+  let ext = String.lowercase_ascii extension in
   if List.mem ext ReadPNG.extensions
   then ReadPNG.parsefile ich else
   if List.mem ext ReadPPM.extensions
   then ReadPPM.parsefile ich else
   if List.mem ext ReadBMP.extensions
   then ReadBMP.parsefile ich else
-  begin
-    warning fn "Cannot read this image format...";
-    let fn' = temp_file "image" ".png" in
-    convert fn fn';
-    let ich' = chunk_reader_of_path fn' in
-    let img = ReadPNG.parsefile ich' in
-    rm fn'; img
-  end
+    raise (Not_yet_implemented ext)
 
-let writefile fn i =
-  let ext = String.lowercase_ascii (get_extension' fn) in
-  if List.mem ext ReadPNG.extensions
-  then write_png fn i else
-  if List.mem ext ReadPPM.extensions
-  then write_ppm fn i Binary else
-  begin
-    warning fn "Cannot write to this image format...";
-    let fn' = temp_file "image" ".png" in
-    write_png fn' i;
-    convert fn' fn;
-    rm fn'
-  end
+let writefile ~extension (och:ImageUtil.chunk_writer) i =
+  let extension = String.lowercase_ascii extension in
+  if List.mem extension ImagePNG.ReadPNG.extensions
+  then ImagePNG.write_png och i else
+  if List.mem extension ImagePPM.ReadPPM.extensions
+  then ImagePPM.write_ppm och i Binary else
+    raise (Not_yet_implemented extension)

@@ -190,19 +190,18 @@ type ppm_mode = Binary | ASCII
  * Warning: the alpha channel is ignored since it is not supported by the PPM
  * image format.
  *)
-let write_ppm fn img mode =
-  let och = open_out_bin fn in
+let write_ppm (och:ImageUtil.chunk_writer) img mode =
   let w = img.width and h = img.height in
 
   (match img.pixels, mode, img.max_val with
    | (RGB _ | RGBA _)  , Binary, mv ->
-     Printf.fprintf och "P6\n%i %i %i\n" w h mv;
+     chunk_printf och "P6\n%i %i %i\n" w h mv;
      for y = 0 to h - 1 do
        for x = 0 to w - 1 do
          read_rgb img x y (fun r g b ->
            if mv < 256
            then begin
-             Printf.fprintf och "%c%c%c"
+             chunk_printf och "%c%c%c"
                (char_of_int r) (char_of_int g) (char_of_int b)
            end else begin
              let r0 = char_of_int (r mod 256) in
@@ -211,20 +210,20 @@ let write_ppm fn img mode =
              let g1 = char_of_int (g lsr 8) in
              let b0 = char_of_int (b mod 256) in
              let b1 = char_of_int (b lsr 8) in
-             Printf.fprintf och "%c%c%c%c%c%c" r1 r0 g1 g0 b1 b0
+             chunk_printf och "%c%c%c%c%c%c" r1 r0 g1 g0 b1 b0
            end)
        done
      done
    | (RGB _ | RGBA _)  , ASCII,  mv ->
-     Printf.fprintf och "P3\n%i %i %i\n" w h mv;
+     chunk_printf och "P3\n%i %i %i\n" w h mv;
      for y = 0 to h - 1 do
        for x = 0 to w - 1 do
           read_rgb img x y (fun r g b ->
-         Printf.fprintf och "%i %i %i\n" r g b)
+         chunk_printf och "%i %i %i\n" r g b)
        done;
      done
    | (Grey _ | GreyA _), Binary, 1  ->
-     Printf.fprintf och "P4\n%i %i\n" w h;
+     chunk_printf och "P4\n%i %i\n" w h;
      for y = 0 to h - 1 do
        let byte = ref 0 in
        let pos = ref 0 in
@@ -234,14 +233,14 @@ let write_ppm fn img mode =
          byte := !byte lor bitmask;
          incr pos;
          if !pos = 8 then begin
-           output_char och (char_of_int !byte);
+           chunk_write_char och (char_of_int !byte);
            byte := 0;
            pos := 0;
          end
        in
 
        let flush_byte () =
-         if !pos <> 0 then output_char och (char_of_int !byte)
+         if !pos <> 0 then chunk_write_char och (char_of_int !byte)
        in
 
        for x = 0 to w - 1 do
@@ -254,40 +253,39 @@ let write_ppm fn img mode =
 
    | (Grey _ | GreyA _), ASCII,  1  ->
      let header = Printf.sprintf "P1\n%i %i\n" w h in
-     output_string och header;
+     chunk_write och header;
      for y = 0 to h - 1 do
        for x = 0 to w - 1 do
          read_grey img x y (fun g ->
-         Printf.fprintf och "%i\n" g)
+         chunk_printf och "%i\n" g)
        done;
      done
 
    | (Grey _ | GreyA _), Binary, mv ->
      let header = Printf.sprintf "P5\n%i %i %i\n" w h mv in
-     output_string och header;
+     chunk_write och header;
      for y = 0 to h - 1 do
        for x = 0 to w - 1 do
         read_grey img x y (fun g ->
           if mv < 256
-          then Printf.fprintf och "%c" (char_of_int g)
+          then chunk_write_char och (char_of_int g)
           else begin
             let gl0 = char_of_int (g mod 256) in
             let gl1 = char_of_int (g lsr 8) in
-            Printf.fprintf och "%c%c" gl1 gl0
+            chunk_printf och "%c%c" gl1 gl0
           end)
        done;
      done
 
    | (Grey _ | GreyA _), ASCII,  mv ->
      let header = Printf.sprintf "P2\n%i %i %i\n" w h mv in
-     output_string och header;
+     chunk_write och header;
      for y = 0 to h - 1 do
        for x = 0 to w - 1 do
          read_grey img x y (fun g ->
-         Printf.fprintf och "%i\n" g)
+         chunk_printf och "%i\n" g)
        done;
      done
   );
 
-  close_out och
-;;
+  close_chunk_writer och

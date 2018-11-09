@@ -21,57 +21,26 @@ type chunk_reader_error = [`End_of_file of int]
 type chunk_reader = ([`Bytes of int | `Close]) ->
                     (string, chunk_reader_error) result
 
+type chunk_writer =
+  [`String of string | `Close] ->
+  (unit, [`Write_error]) result
+
+let chunk_write och (str:string) =
+  match och (`String str) with
+  | Ok () -> ()
+  | Error `Write_error -> raise (Invalid_argument "imagelib write error")
+
+let chunk_write_char och ch =
+  chunk_write och (String.make 1 ch)
+
+(* note that [och] is used to recover from weak polymorphism,
+   so currying [chunk_printf och] will fix the number and types of arguments.*)
+let chunk_printf : 'x. chunk_writer ->
+  ('x, unit, string, unit) format4 -> 'x = fun och ->
+  Printf.kprintf (chunk_write och)
+
 open Pervasives
 
-(** [chop_extension' fname] is the same as [Filename.chop_extension fname] but
-    if [fname] does not have an extension, [fname] is returned instead of
-    raising [Invalid_argument]. *)
-let chop_extension' fname =
-  try Filename.chop_extension fname
-  with _ -> fname
-
-(** [get_extension fname] returns the extension of the file [fname]. If the
-    file does not have an extension, [Invalid_argument] is raised. *)
-let get_extension fname =
-  let baselen = String.length (chop_extension' fname) in
-  let extlen  = String.length fname - baselen - 1 in
-  if extlen <= 0
-  then let err = Printf.sprintf "No extension in filename '%s'." fname in
-       raise (Invalid_argument err)
-  else String.sub fname (baselen + 1) extlen
-
-(** [get_extension' fname] is the same as [get_extension fname] but if [fname]
-    does not have an extension, the empty string is returned and no exception
-    is raised. *)
-let get_extension' fname =
-  try get_extension fname
-  with _ -> ""
-
-(*
- * Reads all the lines in the channel by calling input_line.
- * Returns a list of strings.
- *)
-let lines_from_channel ich =
-  let lines = ref [] in
-
-  let rec intfun () =
-    try
-      let l = input_line ich in
-      lines := l :: !lines;
-      intfun ();
-    with
-     | _ -> ()
-  in
-  intfun ();
-  List.rev !lines
-
-(*
- * Same as lines_from_channel but from a file.
- *)
-let lines_from_file fn =
-  let ich = open_in_bin fn in
-  let ls = lines_from_channel ich in
-  close_in ich; ls
 
 (*
  * Test whether a character is a digit.
@@ -178,15 +147,10 @@ let chunk_reader_of_string s : chunk_reader =
       | exception Invalid_argument _ -> Error (`End_of_file (String.length s))
     end
 
-let chunk_reader_of_in_channel ich : chunk_reader =
-  function
-  | `Bytes num_bytes ->
-    begin try Ok (really_input_string ich num_bytes)
-    with End_of_file -> Error (`End_of_file (pos_in ich))end
-  | `Close -> close_in ich; Ok ""
-
-let chunk_reader_of_path fn = chunk_reader_of_in_channel (open_in_bin fn)
 let close_chunk_reader (reader:chunk_reader) = ignore (reader `Close)
+
+let close_chunk_writer (wr:chunk_writer) = ignore (wr `Close)
+
 let chunk_line (reader:chunk_reader) =
   let rec loop acc =
     match chunk_char reader with
