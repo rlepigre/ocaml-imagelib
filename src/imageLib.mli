@@ -76,3 +76,8 @@ module XCF :
   sig
     module ReadXCF : ReadImage
   end
+
+module BMP :
+  sig
+    module ReadBMP : ReadImage
+  end
