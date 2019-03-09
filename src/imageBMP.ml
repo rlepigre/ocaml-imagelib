@@ -20,7 +20,7 @@ open ImageUtil
 open Image
 
 (* The maximum allowed image width/height *)
-let max_dimension = 1 lsl 16
+let max_dimension = 1 lsl 15
 
 type errors = [ `Bmp_error of string | chunk_reader_error ]
 
@@ -330,7 +330,7 @@ module BitmapMetaData = struct
       in
       read_bitfields ~alpha:(bitfield_size = 16) ich >>= fun bfs ->
 
-      (* Throw the rest of the data until the start of the pixel data *)
+      (* Ignore the rest of the data until the start of the pixel data *)
       let offset_to_pixels = max 0 (file_header.pixel_offset - FileHeader.size - 40 - bitfield_size) in
       get_bytes_res ich offset_to_pixels >>= fun _ ->
 
@@ -355,12 +355,12 @@ module BitmapMetaData = struct
       let palette_size = min offset_to_pixels max_palette_size in
       get_bytes_res ich palette_size >>= fun palette ->
 
-      (* Throw away the rest of the bytes until we get to the pixels *)
+      (* Ignore the rest of the bytes until we get to the pixels *)
       get_bytes_res ich (offset_to_pixels - palette_size) >>= fun _ ->
 
       Ok (None, Some palette)
     | _ ->
-      (* Throw away the rest of the bytes until we get to the pixels *)
+      (* Ignore the rest of the bytes until we get to the pixels *)
       let offset_to_pixels = file_header.pixel_offset - FileHeader.size - 40 in
       get_bytes_res ich offset_to_pixels >>= fun _ ->
       Ok (None, None)

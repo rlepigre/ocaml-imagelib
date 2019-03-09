@@ -270,11 +270,11 @@ let int32_of_str4 s =
 let int32_of_str4_le s =
   let (<<) = Int32.shift_left in
   let (++) = Int32.add in
-  ((Int32.of_int (int_of_char s.[0])) ) ++
-  ((Int32.of_int (int_of_char s.[1])) << 8) ++
-  ((Int32.of_int (int_of_char s.[2])) << 16) ++
-  (Int32.of_int (int_of_char s.[3]) << 24)
-
+  let of_int_at x = Int32.of_int (int_of_char s.[x]) in
+  (of_int_at 0) ++
+  (of_int_at 1 << 8) ++
+  (of_int_at 2 << 16) ++
+  (of_int_at 3 << 24)
 
 (*
  * Converts an integer into a string of length 4.
