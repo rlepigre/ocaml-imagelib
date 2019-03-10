@@ -179,6 +179,7 @@ module BitmapMetaData = struct
 
   type bits_per_pixel =
     | BPP_1
+    | BPP_4
     | BPP_8
     | BPP_16
     | BPP_24
@@ -228,6 +229,7 @@ module BitmapMetaData = struct
 
   let int_of_bpp = function
     | BPP_1 -> 1
+    | BPP_4 -> 4
     | BPP_8 -> 8
     | BPP_16 -> 16
     | BPP_24 -> 24
@@ -236,6 +238,7 @@ module BitmapMetaData = struct
   let read_info_header (ich:chunk_reader): (bitmap_info_header, [> errors]) result =
     let bpp_of_int = function
       | 1 -> Ok BPP_1
+      | 4 -> Ok BPP_4
       | 8 -> Ok BPP_8
       | 16 -> Ok BPP_16
       | 24 -> Ok BPP_24
@@ -336,6 +339,7 @@ module BitmapMetaData = struct
 
       Ok (Some bfs, None)
     | RGB, BPP_1
+    | RGB, BPP_4
     | RGB, BPP_8 ->
       (* Fetch palette *)
       let palette_offset = info_header.size - 40 in
@@ -394,6 +398,17 @@ module ReadBMP : ReadImage = struct
     let bit_offset = 7 - offset + byte_offset * 8 in
     let idx = ((int_of_char bytes.[byte_offset]) lsr bit_offset) land 0x1 in
     assert (idx < 2 && idx >= 0);
+    (
+      (* ignore the alpha channel *)
+      int_of_char palette.[4*idx+2],
+      int_of_char palette.[4*idx+1],
+      int_of_char palette.[4*idx+0]
+    )
+
+  let get_color_4 palette bytes offset =
+    let byte_offset = offset / 2 in
+    let shift = (offset mod 2) * 4 in
+    let idx = ((int_of_char bytes.[byte_offset]) lsr shift) land 0x0f in
     (
       (* ignore the alpha channel *)
       int_of_char palette.[4*idx+2],
@@ -518,6 +533,8 @@ module ReadBMP : ReadImage = struct
       with
         | BPP_1,  RGB, _, Some pl ->
             parse_pixels ~meta ~bpp:1 ~color_getter:(get_color_1 pl) ich
+        | BPP_4,  RGB, _, Some pl ->
+            parse_pixels ~meta ~bpp:4 ~color_getter:(get_color_4 pl) ich
         | BPP_8,  RGB, _, Some pl ->
             parse_pixels ~meta ~bpp:8 ~color_getter:(get_color_8 pl) ich
         | BPP_16, RGB, _, _ ->
