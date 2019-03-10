@@ -17,3 +17,6 @@ Dan Ravensloft (2018):
 
 Berke Durak (2018)
   - added code for outputting PNG images to a byte sequence
+
+Rymdhund (2019):
+  - implemented parsing of bmp images

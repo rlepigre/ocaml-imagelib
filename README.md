@@ -7,6 +7,7 @@ OCaml, relying on only one external dependency: `decompress`.
 Supported image formats:
  - PNG (full implementation of RFC 2083),
  - PPM, PGM, PBM, ... (fully supported),
+ - BMP (mostly supported),
  - JPG (only image size natively, conversion to PNG otherwise),
  - GIF (only image size natively, conversion to PNG otherwise),
  - XCF (only image size natively, conversion to PNG otherwise),

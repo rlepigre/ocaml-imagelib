@@ -25,12 +25,14 @@ open ImagePPM
 open ImageXCF
 open ImageJPG
 open ImageGIF
+open ImageBMP
 
 module PNG = ImagePNG
 module PPM = ImagePPM
 module XCF = ImageXCF
 module JPG = ImageJPG
 module GIF = ImageGIF
+module BMP = ImageBMP
 
 let convert fn fn' =
   let ret =
@@ -63,6 +65,8 @@ let size fn =
   then ReadJPG.size ich else
   if List.mem ext ReadGIF.extensions
   then ReadGIF.size ich else
+  if List.mem ext ReadBMP.extensions
+  then ReadBMP.size ich else
   begin
     warning fn "No support for image size...";
     let fn' = temp_file "image" ".png" in
@@ -79,6 +83,8 @@ let openfile fn : image =
   then ReadPNG.parsefile ich else
   if List.mem ext ReadPPM.extensions
   then ReadPPM.parsefile ich else
+  if List.mem ext ReadBMP.extensions
+  then ReadBMP.parsefile ich else
   begin
     warning fn "Cannot read this image format...";
     let fn' = temp_file "image" ".png" in

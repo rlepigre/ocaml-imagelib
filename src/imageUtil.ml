@@ -213,6 +213,15 @@ let print_byte v =
 let rec ones i = if i == 1 then 1 else ((ones (i-1)) lsl 1) lor 1 ;;
 
 (*
+ * Converts a string of size 2 into an integer
+ * Arguments:
+ *   - s : the string.
+ * Returns an integer.
+ *)
+let int_of_str2_le s =
+  (int_of_char s.[0]) lor ((int_of_char s.[1]) lsl 8)
+
+(*
  * Converts a string of size 4 into an integer WITHOUT taking care of
  * overflow...
  * Arguments:
@@ -224,6 +233,19 @@ let int_of_str4 s =
   int_of_char s.[1] lsl 16 +
   int_of_char s.[2] lsl 8 +
   int_of_char s.[3]
+
+(*
+ * Converts a string of size 4 into an integer WITHOUT taking care of
+ * overflow. Using little endian
+ * Arguments:
+ *   - s : the string.
+ * Returns an integer.
+ *)
+let int_of_str4_le s =
+  (int_of_char s.[0]) lor
+  ((int_of_char s.[1]) lsl 8) lor
+  ((int_of_char s.[2]) lsl 16) lor
+  ((int_of_char s.[3]) lsl 24)
 
 (*
  * Converts a string of size 4 into an Int32.
@@ -238,6 +260,21 @@ let int32_of_str4 s =
   ((Int32.of_int (int_of_char s.[1])) << 16) ++
   ((Int32.of_int (int_of_char s.[2])) << 8) ++
   (Int32.of_int (int_of_char s.[3]))
+
+(*
+ * Converts a string of size 4 into an Int32 using little endian
+ * Arguments:
+ *   - s : the string (should have size 4 at least).
+ * Returns an Int32.
+ *)
+let int32_of_str4_le s =
+  let (<<) = Int32.shift_left in
+  let (++) = Int32.add in
+  let of_int_at x = Int32.of_int (int_of_char s.[x]) in
+  (of_int_at 0) ++
+  (of_int_at 1 << 8) ++
+  (of_int_at 2 << 16) ++
+  (of_int_at 3 << 24)
 
 (*
  * Converts an integer into a string of length 4.
