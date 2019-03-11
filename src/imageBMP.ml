@@ -17,6 +17,7 @@
  * Copyright (C) 2018 Rymdhund
  *)
 open Imagelib_common
+open Interface
 open Util
 open Image
 

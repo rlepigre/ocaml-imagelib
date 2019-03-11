@@ -18,8 +18,8 @@
  *)
 open Pervasives
 open Imagelib_common
+open Interface
 open Util
-open Image
 
 let xcf_signature = "gimp xcf "
 

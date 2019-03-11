@@ -18,7 +18,7 @@
  *)
 open Pervasives
 open Imagelib_common
-open Image
+open Interface
 
 module ReadJPG : ReadImage = struct
   let extensions = ["jpg"; "jpeg"; "jpe"; "jif"; "jfif"; "jfi"]

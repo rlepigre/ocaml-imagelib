@@ -29,15 +29,7 @@ type image =
   ; max_val : int
   ; pixels  : pixmap }
 
-module type ReadImage =
-  sig
-    val extensions : string list
-    val size       : Reader.t -> int * int
-    val parsefile  : Reader.t -> image
-  end
-
-exception Corrupted_image of string
-exception Not_yet_implemented of string
+type t = image
 
 let create_rgb ?(alpha=false) ?(max_val=255) width height =
   if not (1 <= max_val && max_val <= 65535) then
@@ -49,10 +41,7 @@ let create_rgb ?(alpha=false) ?(max_val=255) width height =
     let r = create width height in
     let g = create width height in
     let b = create width height in
-    if alpha then
-      let a = create width height in
-      RGBA (r,g,b,a)
-    else RGB (r,g,b)
+    if alpha then RGBA(r, g, b, create width height) else RGB(r, g, b)
   in
   { width ; height ; max_val ; pixels }
 
@@ -64,10 +53,7 @@ let create_grey ?(alpha=false) ?(max_val=255) width height =
   let create = if max_val <= 255 then Pixmap.create8 else Pixmap.create16 in
   let pixels =
     let g = create width height in
-    if alpha then
-      let a = create width height in
-      GreyA (g,a)
-    else Grey g
+    if alpha then GreyA(g, create width height) else Grey(g)
   in
   { width ; height ; max_val ; pixels }
 

@@ -18,7 +18,7 @@
  *)
 open Pervasives
 open Imagelib_common
-open Image
+open Interface
 
 type gif_header_data = {
   version            : string ;

@@ -52,6 +52,10 @@ val input_bytes : reader -> int -> string
     to consuming a single character, {!Pervasives.End_of_file} is raised. *)
 val input_line : reader -> string
 
+(** [position r] returns the current position of the input in the reader. This
+    function can be used, for example, to build relevant error messages. *)
+val position : reader -> int
+
 (** [close r] closes the reader [r], meaning that the associated memory can be
     deallocated. As a consequence the above functions behave in an unspecified
     way on a reader [r] that has been closed. Closing never fails. *)
@@ -74,10 +78,10 @@ val of_string : string -> reader
 
 (** {3 Generic construction of readers} *)
 
-(** [make_reader ~input_char ~input_line ~close input_bytes] initialises a new
-    reader using the provided functions. If the [close] function is not given,
-    then the closing operation does nothing. If [input_char] (or [input_line])
-    is not given then a (certainly) very inefficient implementation is derived
-    from [input_bytes]. *)
+(** [make_reader ~input_char ~input_line ~close position input_bytes]  creates
+    a new reader using the provided functions.  If the [close] function is not
+    given, then the closing operation does nothing. If [input_char] is omitted
+    then it is derived (not very efficiently) from [input_bytes] (and the same
+    is also true for [input_line]). *)
 val make_reader : ?input_char:(unit -> char) -> ?input_line:(unit -> string)
-  -> ?close:(unit -> unit) -> (int -> string) -> reader
+  -> ?close:(unit -> unit) -> (unit -> int) -> (int -> string) -> reader

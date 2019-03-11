@@ -18,6 +18,7 @@
  *)
 open Pervasives
 open Imagelib_common
+open Interface
 open Util
 open Image
 open ImageChannels

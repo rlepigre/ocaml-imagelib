@@ -17,6 +17,7 @@
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
 open Imagelib_common
+open Interface
 open Image
 
 module ReadPPM : ReadImage = struct

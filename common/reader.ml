@@ -21,6 +21,7 @@ type reader =
   { input_char  : unit -> char
   ; input_bytes : int  -> string
   ; input_line  : unit -> string
+  ; position    : unit -> int
   ; close       : unit -> unit }
 
 type t = reader
@@ -29,12 +30,14 @@ let input_bytes : reader -> int -> string = fun r -> r.input_bytes
 let input_char : reader -> char = fun r -> r.input_char ()
 let input_byte : reader -> int = fun r -> Char.code (r.input_char ())
 let input_line : reader -> string = fun r -> r.input_line ()
+let position : reader -> int = fun r -> r.position ()
 let close : reader -> unit = fun r -> r.close ()
 
 let of_channel : Pervasives.in_channel -> reader = fun ic ->
   { input_char  = (fun () -> Pervasives.input_char ic)
   ; input_bytes = Pervasives.really_input_string ic
   ; input_line  = (fun () -> Pervasives.input_line ic)
+  ; position    = (fun () -> Pervasives.pos_in ic)
   ; close       = (fun () -> Pervasives.close_in_noerr ic) }
 
 let of_file : string -> reader = fun path ->
@@ -63,12 +66,13 @@ let of_string : string -> reader = fun s ->
     if !offset < len then incr offset;
     line
   in
+  let position () = !offset in
   let close () = () in
-  { input_char ; input_bytes ; input_line ; close }
+  { input_char ; input_bytes ; input_line ; position ; close }
 
 let make_reader : ?input_char:(unit -> char) -> ?input_line:(unit -> string)
-    -> ?close:(unit -> unit) -> (int -> string) -> reader =
-  fun ?input_char ?input_line ?close input_bytes ->
+    -> ?close:(unit -> unit) -> (unit -> int) -> (int -> string) -> reader =
+  fun ?input_char ?input_line ?close position input_bytes ->
     let input_char =
       match input_char with
       | None    -> (fun () -> String.get (input_bytes 1) 0)
@@ -95,4 +99,4 @@ let make_reader : ?input_char:(unit -> char) -> ?input_line:(unit -> string)
       | None    -> ignore
       | Some(f) -> f
     in
-    { input_char ; input_bytes ; input_line ; close }
+    { input_char ; input_bytes ; input_line ; position ; close }
