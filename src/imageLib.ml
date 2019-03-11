@@ -18,7 +18,6 @@
  *)
 
 open Image
-(*open ImageUtil*)
 
 open ImagePNG
 open ImagePPM
