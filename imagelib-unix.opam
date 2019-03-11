@@ -1,23 +1,18 @@
-synopsis: "The imagelib library implements image formats such as PNG and PPM"
+synopsis: "Utility library for 'imagelib' with Unix-dependent functionality"
 description:
 """
-The imagelib library implements image formats such as PNG and PPM
+This package implements Unix-dependent functionality for the 'imagelib' library.
 
-The imagelib library implements image formats such as PNG and PPM in
-OCaml, relying on only one external dependency: 'decompress'.
+This includes operations like interacting with the filesystem
+(reading or writing to files).
 
-Supported image formats:
- - PNG (full implementation of RFC 2083),
- - PPM, PGM, PBM, ... (fully supported),
- - JPG (only image size natively, conversion to PNG otherwise),
- - GIF (only image size natively, conversion to PNG otherwise),
- - XCF (only image size natively, conversion to PNG otherwise),
- - Other formats rely on 'convert' (imagemagick).
-
-As imagelib only requires 'decompress', it can be used together with
-js_of_ocaml to compile projects to Javascript. Note that some of the
-features of imagelib require the convert binary  (and thus cannot be
-used from Javascript).
+Another feature is supported for unimplemented image formats through an
+intermediate step of converting the image to PNG format
+using the 'convert' command from the 'imagemagick' operating system package,
+if installed. While ImageMagick is required for this feature, is is not a hard
+dependency of this OPAM package since that would prevent people who can't
+install imagemagick from using 'imagelib-unix' to read or write the implemented
+file formats.
 """
 opam-version: "2.0"
 maintainer: "rodolphe.lepigre@inria.fr"
