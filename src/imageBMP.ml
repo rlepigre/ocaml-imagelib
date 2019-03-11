@@ -16,12 +16,14 @@
  *
  * Copyright (C) 2018 Rymdhund
  *)
-open ImageUtil
+open Imagelib_common
+open Util
 open Image
 
 (* The maximum allowed image width/height *)
 let max_dimension = 1 lsl 15
 
+type chunk_reader_error = [ `End_of_file ]
 type errors = [ `Bmp_error of string | chunk_reader_error ]
 
 module BmpUtils = struct
@@ -33,25 +35,24 @@ module BmpUtils = struct
   let (>>=) = bind_result
 
   (* Result based bytes getter instead of raising exceptions *)
-  let get_bytes_res (ich:chunk_reader) num_bytes: (string, [>chunk_reader_error]) result =
-    match (ich (`Bytes num_bytes)) with
-    | Ok x -> Ok x
-    | Error e -> Error (e : chunk_reader_error :> [>chunk_reader_error])
+  let get_bytes_res (ich:Reader.t) num_bytes: (string, [>chunk_reader_error]) result =
+    try Ok(Reader.input_bytes ich num_bytes)
+    with End_of_file -> Error `End_of_file
 
-  let get_int2_le (ich:chunk_reader): (int, [>chunk_reader_error]) result =
+  let get_int2_le (ich:Reader.t): (int, [>chunk_reader_error]) result =
     get_bytes_res ich 2  >>= fun bs ->
     Ok (int_of_str2_le bs)
 
-  let get_int4_le (ich:chunk_reader) : (int, [>chunk_reader_error]) result=
+  let get_int4_le (ich:Reader.t) : (int, [>chunk_reader_error]) result=
     get_bytes_res ich 4  >>= fun bs ->
     Ok (int_of_str4_le bs)
 
   (* Read signed 4 byte int from a channel and return it as an int *)
-  let get_int4_signed_le (ich:chunk_reader): (int, [>chunk_reader_error]) result =
+  let get_int4_signed_le (ich:Reader.t): (int, [>chunk_reader_error]) result =
     get_bytes_res ich 4  >>= fun bs ->
     Ok (int32_of_str4_le bs |> Int32.to_int)
 
-  let get_int32 (ich:chunk_reader): (Int32.t, [>chunk_reader_error]) result =
+  let get_int32 (ich:Reader.t): (Int32.t, [>chunk_reader_error]) result =
     get_bytes_res ich 4  >>= fun bs ->
     Ok (int32_of_str4_le bs)
 end
@@ -68,7 +69,7 @@ module FileHeader = struct
   let size = 14
 
   (* Read the first 14 bytes of ich and produce a file header *)
-  let read (ich:ImageUtil.chunk_reader): (t, [> errors]) result =
+  let read (ich:Reader.t): (t, [> errors]) result =
     get_bytes_res ich 2 >>= fun typ ->
     if typ <> "BM" then
       Error (`Bmp_error  "BMP signature expected...")
@@ -235,7 +236,7 @@ module BitmapMetaData = struct
     | BPP_24 -> 24
     | BPP_32 -> 32
 
-  let read_info_header (ich:chunk_reader): (bitmap_info_header, [> errors]) result =
+  let read_info_header (ich:Reader.t): (bitmap_info_header, [> errors]) result =
     let bpp_of_int = function
       | 1 -> Ok BPP_1
       | 4 -> Ok BPP_4
@@ -309,9 +310,9 @@ module BitmapMetaData = struct
   let read_bitfield_palette
   (file_header: FileHeader.t)
   (info_header: bitmap_info_header)
-  (ich:chunk_reader)
+  (ich:Reader.t)
   : (bitfields option * string option, [> errors]) result =
-    let read_bitfields ~alpha (ich:chunk_reader) =
+    let read_bitfields ~alpha (ich:Reader.t) =
       get_int32 ich >>= Bitfield.of_mask >>= fun r ->
       get_int32 ich >>= Bitfield.of_mask >>= fun g ->
       get_int32 ich >>= Bitfield.of_mask >>= fun b ->
@@ -370,7 +371,7 @@ module BitmapMetaData = struct
       Ok (None, None)
 
   (* Read the data until the file header offset and produce the bmp meta data *)
-  let read (ich:ImageUtil.chunk_reader): (t, [> errors]) result =
+  let read (ich:Reader.t): (t, [> errors]) result =
     FileHeader.read ich >>= fun file_header ->
     read_info_header ich >>= fun info_header ->
     read_bitfield_palette file_header info_header ich >>= fun (bitfields, palette) ->
@@ -385,12 +386,12 @@ end
 module ReadBMP : ReadImage = struct
   let extensions = ["bmp"; "dib"]
 
-  let size (ich:chunk_reader) =
+  let size (ich:Reader.t) =
     let meta_res = BitmapMetaData.read ich in
-    ImageUtil.close_chunk_reader ich;
+    Reader.close ich;
     match meta_res with
     | Ok meta -> meta.info_header.width, meta.info_header.height
-    | Error (`End_of_file _) -> raise (Corrupted_image "Unexpected end of file")
+    | Error (`End_of_file) -> raise (Corrupted_image "Unexpected end of file")
     | Error (`Bmp_error msg) -> raise (Corrupted_image msg)
 
   let get_color_1 palette bytes offset =
@@ -472,7 +473,7 @@ module ReadBMP : ReadImage = struct
   ~(meta: BitmapMetaData.t)
   ~bpp
   ~color_getter
-  (ich:chunk_reader)
+  (ich:Reader.t)
   : (image, [> errors]) result =
     let ih = meta.info_header in
     let row_size = (ih.width * bpp + 31) / 32 * 4 in
@@ -481,7 +482,7 @@ module ReadBMP : ReadImage = struct
     try
       for y = 0 to ih.height - 1 do
         (* fetch row including padding *)
-        let row = get_bytes ich row_size in
+        let row = Reader.input_bytes ich row_size in
         for x = 0 to ih.width - 1 do
           let (r, g, b) = color_getter row x in
           write_rgb image x (ih.height - y - 1) r g b;
@@ -489,13 +490,13 @@ module ReadBMP : ReadImage = struct
       done;
       Ok image
     with End_of_file ->
-      Error (`End_of_file 0)
+      Error `End_of_file
 
   let parse_pixels_alpha
   ~(meta: BitmapMetaData.t)
   ~bpp
   ~color_getter
-  (ich:chunk_reader)
+  (ich:Reader.t)
   : (image, [> errors]) result =
     let ih = meta.info_header in
     let row_size = (ih.width * bpp + 31) / 32 * 4 in
@@ -504,7 +505,7 @@ module ReadBMP : ReadImage = struct
     try
       for y = 0 to ih.height - 1 do
         (* fetch row including padding *)
-        let row = get_bytes ich row_size in
+        let row = Reader.input_bytes ich row_size in
         for x = 0 to ih.width - 1 do
           let (r, g, b, a) = color_getter row x in
           write_rgba image x (ih.height - y - 1) r g b a;
@@ -512,7 +513,7 @@ module ReadBMP : ReadImage = struct
       done;
       Ok image
     with End_of_file ->
-      Error (`End_of_file 0)
+      Error `End_of_file
 
   let standard_16_bit_bitfields =
     Bitfield.(
@@ -522,7 +523,7 @@ module ReadBMP : ReadImage = struct
       of_mask_exn 0x0000l
     )
 
-  let parsefile (ich:chunk_reader): image =
+  let parsefile (ich:Reader.t): image =
 
     let make_image (meta:BitmapMetaData.t) =
       match
@@ -554,9 +555,9 @@ module ReadBMP : ReadImage = struct
             Error (`Bmp_error "Invalid bits per pixel/compression method combination")
     in
     let image_res = BitmapMetaData.read ich >>= make_image in
-    close_chunk_reader ich;
+    Reader.close ich;
     match image_res with
-    | Error (`End_of_file _) -> raise (Corrupted_image "Unexpected end of file")
+    | Error (`End_of_file) -> raise (Corrupted_image "Unexpected end of file")
     | Error (`Bmp_error msg) -> raise (Corrupted_image msg)
     | Ok img -> img
 end

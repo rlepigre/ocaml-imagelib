@@ -1,49 +1,21 @@
-(*
- * This file is part of Imagelib.
- *
- * Imagelib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Imabelib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Imabelib.  If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright (C) 2014 Rodolphe Lepigre.
- *)
-
-open ImageUtil
-
-module Pixmap =
-  struct
-    open Bigarray
-
-    type pixmap8  = (int, int8_unsigned_elt , c_layout) Array2.t
-    type pixmap16 = (int, int16_unsigned_elt, c_layout) Array2.t
-
-    type t =
-      | Pix8  of pixmap8
-      | Pix16 of pixmap16
-
-    let create8  : int -> int -> t = fun w h ->
-      Pix8 (Array2.create int8_unsigned c_layout w h)
-
-    let create16 : int -> int -> t = fun w h ->
-      Pix16 (Array2.create int16_unsigned c_layout w h)
-
-    let get : t -> int -> int -> int = function
-      | Pix8  p -> Array2.get p
-      | Pix16 p -> Array2.get p
-
-    let set : t -> int -> int -> int -> unit = function
-      | Pix8  p -> Array2.set p
-      | Pix16 p -> Array2.set p
-  end
+(****************************************************************************)
+(* This file is part of the Imagelib library.                               *)
+(*                                                                          *)
+(* The Imagelib library is free software:  you can redistribute  it  and/or *)
+(* modify it under the terms of the GNU General Public License as published *)
+(* by the Free Software Foundation, either version 3 of the License, or (at *)
+(* your option) any later version.                                          *)
+(*                                                                          *)
+(* Imabelib is distributed in the hope that it will be useful,  but WITHOUT *)
+(* ANY WARRANTY;  without even the implied warranty of  MERCHANTABILITY  or *)
+(* FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for *)
+(* more details.                                                            *)
+(*                                                                          *)
+(* You should have received a copy of the GNU General Public License along  *)
+(* with the Imabelib library. If not, see <http://www.gnu.org/licenses/>.   *)
+(*                                                                          *)
+(* Copyright (C) 2014-2019 Rodolphe Lepigre.                                *)
+(****************************************************************************)
 
 type pixmap =
   | Grey  of Pixmap.t
@@ -60,8 +32,8 @@ type image =
 module type ReadImage =
   sig
     val extensions : string list
-    val size       : chunk_reader -> int * int
-    val parsefile  : chunk_reader -> image
+    val size       : Reader.t -> int * int
+    val parsefile  : Reader.t -> image
   end
 
 exception Corrupted_image of string
@@ -69,10 +41,9 @@ exception Not_yet_implemented of string
 
 let create_rgb ?(alpha=false) ?(max_val=255) width height =
   if not (1 <= max_val && max_val <= 65535) then
-    raise (Invalid_argument
-             "create_rgb: false: (1 <= max_val && max_val <= 65535)") ;
+    invalid_arg "create_rgb: false: (1 <= max_val && max_val <= 65535)";
   if not (width > 0 && height > 0) then
-    raise (Invalid_argument "create_rgb: width or height <= 0") ;
+    invalid_arg "create_rgb: width or height <= 0";
   let create = if max_val <= 255 then Pixmap.create8 else Pixmap.create16 in
   let pixels =
     let r = create width height in
@@ -87,10 +58,9 @@ let create_rgb ?(alpha=false) ?(max_val=255) width height =
 
 let create_grey ?(alpha=false) ?(max_val=255) width height =
   if not (1 <= max_val && max_val <= 65535) then
-    raise (Invalid_argument
-             "create_grey: false: (1 <= max_val && max_val <= 65535)") ;
+    invalid_arg "create_grey: false: (1 <= max_val && max_val <= 65535)";
   if not (width > 0 && height > 0) then
-    raise (Invalid_argument "create_grey: width or height <= 0") ;
+    invalid_arg "create_grey: width or height <= 0";
   let create = if max_val <= 255 then Pixmap.create8 else Pixmap.create16 in
   let pixels =
     let g = create width height in
@@ -179,82 +149,58 @@ let read_grey i x y fn =
 let write_rgba i x y r g b a =
   match i.pixels with
   | RGB(rr,gg,bb)     ->
-      begin
-        Pixmap.set rr x y r;
-        Pixmap.set gg x y g;
-        Pixmap.set bb x y b
-      end
+      Pixmap.set rr x y r;
+      Pixmap.set gg x y g;
+      Pixmap.set bb x y b
   | RGBA(rr,gg,bb,aa) ->
-      begin
-        Pixmap.set rr x y r;
-        Pixmap.set gg x y g;
-        Pixmap.set bb x y b;
-        Pixmap.set aa x y a
-      end
+      Pixmap.set rr x y r;
+      Pixmap.set gg x y g;
+      Pixmap.set bb x y b;
+      Pixmap.set aa x y a
   | Grey(gg)          ->
-      begin
-        let g = (r + g + b) / 3 in
-        Pixmap.set gg x y g
-      end
+      let g = (r + g + b) / 3 in
+      Pixmap.set gg x y g
   | GreyA(gg,aa)      ->
-      begin
-        let g = (r + g + b) / 3 in
-        Pixmap.set gg x y g;
-        Pixmap.set aa x y a
-      end
+      let g = (r + g + b) / 3 in
+      Pixmap.set gg x y g;
+      Pixmap.set aa x y a
 
 let write_rgb i x y r g b =
   match i.pixels with
   | RGB(rr,gg,bb)
   | RGBA(rr,gg,bb,_) ->
-      begin
-        Pixmap.set rr x y r;
-        Pixmap.set gg x y g;
-        Pixmap.set bb x y b
-      end
+      Pixmap.set rr x y r;
+      Pixmap.set gg x y g;
+      Pixmap.set bb x y b
   | Grey(gg)
   | GreyA(gg,_)      ->
-      begin
-        let g = (r + g + b) / 3 in
-        Pixmap.set gg x y g
-      end
+      let g = (r + g + b) / 3 in
+      Pixmap.set gg x y g
 
 let write_greya i x y g a =
   match i.pixels with
   | RGB(rr,gg,bb)     ->
-      begin
-        Pixmap.set rr x y g;
-        Pixmap.set gg x y g;
-        Pixmap.set bb x y g
-      end
+      Pixmap.set rr x y g;
+      Pixmap.set gg x y g;
+      Pixmap.set bb x y g
   | RGBA(rr,gg,bb,aa) ->
-      begin
-        Pixmap.set rr x y g;
-        Pixmap.set gg x y g;
-        Pixmap.set bb x y g;
-        Pixmap.set aa x y a
-      end
+      Pixmap.set rr x y g;
+      Pixmap.set gg x y g;
+      Pixmap.set bb x y g;
+      Pixmap.set aa x y a
   | Grey(gg)          ->
-      begin
-        Pixmap.set gg x y g
-      end
+      Pixmap.set gg x y g
   | GreyA(gg,aa)      ->
-      begin
-        Pixmap.set gg x y g;
-        Pixmap.set aa x y a
-      end
+      Pixmap.set gg x y g;
+      Pixmap.set aa x y a
 
 let write_grey i x y g =
   match i.pixels with
   | RGB(rr,gg,bb)
   | RGBA(rr,gg,bb,_) ->
-      begin
-        Pixmap.set rr x y g;
-        Pixmap.set gg x y g;
-        Pixmap.set bb x y g
-      end
+      Pixmap.set rr x y g;
+      Pixmap.set gg x y g;
+      Pixmap.set bb x y g
   | Grey(gg)
   | GreyA(gg,_)      ->
-      begin
-        Pixmap.set gg x y g
-      end
+      Pixmap.set gg x y g

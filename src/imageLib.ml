@@ -17,8 +17,9 @@
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
 open Filename
+open Imagelib_common
 open Image
-open ImageUtil
+open Util
 
 open ImagePNG
 open ImagePPM
@@ -54,7 +55,7 @@ let warning fn msg =
 
 let size fn =
   let ext = String.lowercase_ascii (get_extension' fn) in
-  let ich = chunk_reader_of_path fn in
+  let ich = Reader.of_file fn in
   if List.mem ext ReadPNG.extensions
   then ReadPNG.size ich else
   if List.mem ext ReadPPM.extensions
@@ -71,14 +72,14 @@ let size fn =
     warning fn "No support for image size...";
     let fn' = temp_file "image" ".png" in
     convert fn fn';
-    let ich' = chunk_reader_of_path fn' in
+    let ich' = Reader.of_file fn' in
     let sz = ReadPNG.size ich' in
     rm fn'; sz
   end
 
 let openfile fn : image =
   let ext = String.lowercase_ascii (get_extension' fn) in
-  let ich = chunk_reader_of_path fn in
+  let ich = Reader.of_file fn in
   if List.mem ext ReadPNG.extensions
   then ReadPNG.parsefile ich else
   if List.mem ext ReadPPM.extensions
@@ -89,7 +90,7 @@ let openfile fn : image =
     warning fn "Cannot read this image format...";
     let fn' = temp_file "image" ".png" in
     convert fn fn';
-    let ich' = chunk_reader_of_path fn' in
+    let ich' = Reader.of_file fn' in
     let img = ReadPNG.parsefile ich' in
     rm fn'; img
   end

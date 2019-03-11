@@ -17,18 +17,18 @@
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
 open Pervasives
-open ImageUtil
+open Imagelib_common
 open Image
 
 module ReadJPG : ReadImage = struct
   let extensions = ["jpg"; "jpeg"; "jpe"; "jif"; "jfif"; "jfi"]
 
   let read_marker ich =
-    let ff = chunk_byte ich in
+    let ff = Reader.input_byte ich in
     if ff <> 0xff then
       raise (Corrupted_image "Expected marker...");
     let rec read_first_not_ff ich =
-      let c = chunk_byte ich in
+      let c = Reader.input_byte ich in
       if c = 0xff then read_first_not_ff ich else c
     in
     let c = read_first_not_ff ich in
@@ -45,9 +45,9 @@ module ReadJPG : ReadImage = struct
     (* Read other header sections *)
     let rec read_header_sections ich acc =
       let mrk = read_marker ich in
-      let sz = get_bytes ich 2 in
+      let sz = Reader.input_bytes ich 2 in
       let size = ((int_of_char sz.[0]) lsl 8) lor (int_of_char sz.[1]) in
-      let data = get_bytes ich (size - 2) in
+      let data = Reader.input_bytes ich (size - 2) in
       if mrk = 0xda then (* SOS reached *)
         List.rev ((mrk, data) :: acc)
       else
@@ -64,7 +64,7 @@ module ReadJPG : ReadImage = struct
    *)
   let size ich =
     let headers = read_header_data ich in
-    close_chunk_reader ich;
+    Reader.close ich;
 
     let rec find_SOF ls =
       match ls with

@@ -17,7 +17,7 @@
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
 open Pervasives
-open ImageUtil
+open Imagelib_common
 open Image
 
 type gif_header_data = {
@@ -35,18 +35,18 @@ module ReadGIF : ReadImage = struct
   let extensions = ["gif"]
 
   (* Read signature and header *)
-  let read_header (ich:ImageUtil.chunk_reader) =
-    let magic = get_bytes ich 3 in
+  let read_header (ich:Reader.t) =
+    let magic = Reader.input_bytes ich 3 in
     if magic <> "GIF" then
       raise (Corrupted_image "GIF signature expected...");
-    let version = get_bytes ich 3 in
+    let version = Reader.input_bytes ich 3 in
     if version <> "87a" && version <> "89a" then
       raise (Corrupted_image "Version of GIF not supported...");
-    let width  = get_bytes ich 2 in
-    let height = get_bytes ich 2 in
-    let packed = chunk_byte ich in
-    let bgcol  = chunk_byte ich in
-    let pixar  = chunk_byte ich in
+    let width  = Reader.input_bytes ich 2 in
+    let height = Reader.input_bytes ich 2 in
+    let packed = Reader.input_byte ich in
+    let bgcol  = Reader.input_byte ich in
+    let pixar  = Reader.input_byte ich in
     let w = ((int_of_char width.[1]) lsl 8) lor (int_of_char width.[0]) in
     let h = ((int_of_char height.[1]) lsl 8) lor (int_of_char height.[0]) in
     {
@@ -69,8 +69,7 @@ module ReadGIF : ReadImage = struct
    *)
   let size ich =
     let hdr = read_header ich in
-    ImageUtil.close_chunk_reader ich;
-    hdr.image_size
+    Reader.close ich; hdr.image_size
 
   let parsefile _ =
     raise (Not_yet_implemented "ImageGIF.openfile") (* TODO  *)

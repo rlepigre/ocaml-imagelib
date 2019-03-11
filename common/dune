@@ -1,0 +1,4 @@
+(library
+  (name imagelib_common)
+  (public_name imagelib.common)
+  (modules :standard))

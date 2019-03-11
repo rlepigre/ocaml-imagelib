@@ -1,27 +1,21 @@
-(*
- * This file is part of Imagelib.
- *
- * Imagelib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Imabelib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Imabelib.  If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright (C) 2014 Rodolphe Lepigre.
- *)
-
-type chunk_reader_error = [`End_of_file of int]
-type chunk_reader = ([`Bytes of int | `Close]) ->
-                    (string, chunk_reader_error) result
-
-open Pervasives
+(****************************************************************************)
+(* This file is part of the Imagelib library.                               *)
+(*                                                                          *)
+(* The Imagelib library is free software:  you can redistribute  it  and/or *)
+(* modify it under the terms of the GNU General Public License as published *)
+(* by the Free Software Foundation, either version 3 of the License, or (at *)
+(* your option) any later version.                                          *)
+(*                                                                          *)
+(* Imabelib is distributed in the hope that it will be useful,  but WITHOUT *)
+(* ANY WARRANTY;  without even the implied warranty of  MERCHANTABILITY  or *)
+(* FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for *)
+(* more details.                                                            *)
+(*                                                                          *)
+(* You should have received a copy of the GNU General Public License along  *)
+(* with the Imabelib library. If not, see <http://www.gnu.org/licenses/>.   *)
+(*                                                                          *)
+(* Copyright (C) 2014-2019 Rodolphe Lepigre.                                *)
+(****************************************************************************)
 
 (** [chop_extension' fname] is the same as [Filename.chop_extension fname] but
     if [fname] does not have an extension, [fname] is returned instead of
@@ -35,10 +29,9 @@ let chop_extension' fname =
 let get_extension fname =
   let baselen = String.length (chop_extension' fname) in
   let extlen  = String.length fname - baselen - 1 in
-  if extlen <= 0
-  then let err = Printf.sprintf "No extension in filename '%s'." fname in
-       raise (Invalid_argument err)
-  else String.sub fname (baselen + 1) extlen
+  if extlen <= 0 then
+    invalid_arg (Printf.sprintf "No extension in filename '%s'." fname);
+  String.sub fname (baselen + 1) extlen
 
 (** [get_extension' fname] is the same as [get_extension fname] but if [fname]
     does not have an extension, the empty string is returned and no exception
@@ -152,49 +145,6 @@ let show_string_hex s =
   done;
   if !count mod 16 <> 0 then Printf.fprintf stderr "\n";
   Printf.fprintf stderr "%!"
-
-(*
- * Fetch bytes on an input channel and store them in a string.
- * Arguments:
- *   - ich : the input channel.
- *   - n : number of bytes to fecth
- * Returns a string of length n.
- *)
-let get_bytes (reader:chunk_reader) num_bytes =
-  reader (`Bytes num_bytes)
-  |> function | Ok x -> x
-              | Error (`End_of_file _) -> raise End_of_file
-
-let chunk_char (reader:chunk_reader) = String.get (get_bytes reader 1) 0
-let chunk_byte (reader:chunk_reader) = chunk_char reader |> Char.code
-
-let chunk_reader_of_string s : chunk_reader =
-  let offset = ref 0 in
-  function
-  | `Close -> Ok ""
-  | `Bytes n ->
-    begin match String.sub s !offset n with
-      | s -> offset := !offset + n ; Ok s
-      | exception Invalid_argument _ -> Error (`End_of_file (String.length s))
-    end
-
-let chunk_reader_of_in_channel ich : chunk_reader =
-  function
-  | `Bytes num_bytes ->
-    begin try Ok (really_input_string ich num_bytes)
-    with End_of_file -> Error (`End_of_file (pos_in ich))end
-  | `Close -> close_in ich; Ok ""
-
-let chunk_reader_of_path fn = chunk_reader_of_in_channel (open_in_bin fn)
-let close_chunk_reader (reader:chunk_reader) = ignore (reader `Close)
-let chunk_line (reader:chunk_reader) =
-  let rec loop acc =
-    match chunk_char reader with
-    | '\n' ->
-      let a = Array.of_list acc in
-      Bytes.init (Array.length a) (fun i -> a.(i)) |> Bytes.to_string
-    | c  -> loop (c::acc)
-  in loop []
 
 let print_byte v =
   for i = 7 downto 0 do

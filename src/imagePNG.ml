@@ -17,7 +17,8 @@
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
 open Pervasives
-open ImageUtil
+open Imagelib_common
+open Util
 open Image
 open ImageChannels
 
@@ -158,8 +159,8 @@ module ReadPNG : ReadImage = struct
    * Arguments:
    *   - ich : input channel.
    *)
-  let read_signature (ich:ImageUtil.chunk_reader) =
-    let hdr = get_bytes ich 8 in
+  let read_signature (ich:Reader.t) =
+    let hdr = Reader.input_bytes ich 8 in
     if String.sub hdr 1 3 = "PNG" then
       (if hdr <> png_signature then
         raise (Corrupted_image "Corrupted header..."))
@@ -171,7 +172,7 @@ module ReadPNG : ReadImage = struct
    * Returns chunk data.
    *)
   let read_chunk ich =
-    let length = int32_of_str4 (get_bytes ich 4) in
+    let length = int32_of_str4 (Reader.input_bytes ich 4) in
     let real_length_read = Int32.add length 4l in
     if real_length_read < 4l (* <-- check for overflow*)
     (* check that it's safe to cast to int: *)
@@ -182,8 +183,8 @@ module ReadPNG : ReadImage = struct
       raise (Corrupted_image "Size of chunk greater than OCaml can handle...");
     let length = Int32.to_int length in (* FIXME unsafe for large chunks *)
     try
-      let data = get_bytes ich (length + 4) in
-      let str_crc = get_bytes ich 4 in
+      let data = Reader.input_bytes ich (length + 4) in
+      let str_crc = Reader.input_bytes ich 4 in
       let expected_crc = int32_of_str4 str_crc in
       let crc = png_crc data (length + 4) in
       if expected_crc <> crc then
@@ -264,7 +265,7 @@ module ReadPNG : ReadImage = struct
     if ihdr_chunk.chunk_type <> "IHDR" then
       raise (Corrupted_image "First chunk should be of type IHDR...");
     let ihdr = data_from_ihdr ihdr_chunk.chunk_data in
-    close_chunk_reader ich;
+    Reader.close ich;
     ihdr.image_size
 
   (* Removes the filter on a scanline.
@@ -484,7 +485,7 @@ module ReadPNG : ReadImage = struct
     let only_once ctype =
       if List.mem ctype !read_chunks
       then begin
-        close_chunk_reader ich;
+        Reader.close ich;
         raise (Corrupted_image
                  (Printf.sprintf
                     "Chunk %s should not appear more than once..." ctype))
@@ -494,7 +495,7 @@ module ReadPNG : ReadImage = struct
     let only_before ctype ctype' =
       if List.mem ctype' !read_chunks
       then begin
-        close_chunk_reader ich;
+        Reader.close ich;
         raise (Corrupted_image
                  (Printf.sprintf
                     "Chunk %s should appear before chunk %s..." ctype ctype'))
@@ -504,7 +505,7 @@ module ReadPNG : ReadImage = struct
     let only_after ctype' ctype =
       if not (List.mem ctype' !read_chunks)
       then begin
-        close_chunk_reader ich;
+        Reader.close ich;
         raise (Corrupted_image
                 (Printf.sprintf
                     "Chunk %s should appear after chunk %s..." ctype ctype'))
@@ -514,7 +515,7 @@ module ReadPNG : ReadImage = struct
     let is_first_chunk ctype =
       if ([] <> !read_chunks)
       then begin
-        close_chunk_reader ich;
+        Reader.close ich;
         raise (Corrupted_image
                  (Printf.sprintf
                     "Chunk %s can only be the first chunk..." ctype))
@@ -524,7 +525,7 @@ module ReadPNG : ReadImage = struct
     let is_not_first_chunk ctype =
       if ([] = !read_chunks)
       then begin
-        close_chunk_reader ich;
+        Reader.close ich;
         raise (Corrupted_image
                  (Printf.sprintf
                     "Chunk %s cannot be the first chunk..." ctype))
@@ -534,7 +535,7 @@ module ReadPNG : ReadImage = struct
     let is_not_compatible_with ctype ctype' =
       if List.mem ctype' !read_chunks
       then begin
-        close_chunk_reader ich;
+        Reader.close ich;
         raise (Corrupted_image
                  (Printf.sprintf
                     "Chunk %s is not compatible with chunk %s..." ctype ctype'))
@@ -554,7 +555,7 @@ module ReadPNG : ReadImage = struct
     let not_after ctype' ctype =
       if List.mem ctype' !read_chunks
       then begin
-        close_chunk_reader ich;
+        Reader.close ich;
         raise (Corrupted_image
                  (Printf.sprintf
                     "Chunk %s cannot appear after chunk %s..." ctype ctype'))
@@ -834,17 +835,17 @@ module ReadPNG : ReadImage = struct
         read_chunks := !curr_chunk.chunk_type :: !read_chunks;
         curr_chunk := read_chunk ich
       done with End_of_file ->
-        close_chunk_reader ich;
+        Reader.close ich;
         raise (Corrupted_image "End of file reached before chunk end...")
     end;
     read_chunks := "IEND" :: !read_chunks;
     if !debug then Printf.eprintf "IEND reached\n%!";
 
     (* Check for trailing bytes... *)
-    if (try let _ = chunk_byte ich in true with End_of_file -> false)
+    if (try let _ = Reader.input_char ich in true with End_of_file -> false)
     then raise (Corrupted_image "Data after the IEND chunk...");
 
-    close_chunk_reader ich;
+    Reader.close ich;
 
     let uncomp_idat = uncompress_string !raw_idat in
 

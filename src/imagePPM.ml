@@ -16,8 +16,7 @@
  *
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
-open Pervasives
-open ImageUtil
+open Imagelib_common
 open Image
 
 module ReadPPM : ReadImage = struct
@@ -30,46 +29,63 @@ module ReadPPM : ReadImage = struct
    *)
   let extensions = ["ppm"; "pgm"; "pbm"; "pnm"]
 
-  let read_header (content:chunk_reader) =
-    let magic = ref "" in
-    let width = ref (-1) and height = ref (-1) in
-    let max_val = ref 1 in
-    let scanner = Scanf.Scanning.from_function (fun () -> chunk_char content) in
-    let rec pass_comments () =
-      try
-        Scanf.bscanf scanner "#%[^\n\r]%[\t\n\r]" (fun _ _ -> () );
-        pass_comments ()
-      with _ -> ()
-    in
-    Scanf.bscanf scanner "%s%[\t\n ]" (fun mn _ -> magic := mn);
-    pass_comments ();
+  (* check if any of space, CR, LF, TAB, VT, or FF. *)
+  let is_space c =
+    match c with
+    | ' '    (* Space *)
+    | '\n'   (* LF    *)
+    | '\t'   (* TAB   *)
+    | '\r'   (* CR    *)
+    | '\x0B' (* VT    *)
+    | '\xFF' (* 0XFF  *) -> true
+    | _                  -> false
 
-    if not (List.mem !magic ["P1"; "P2"; "P3"; "P4"; "P5"; "P6"]) then
-      raise (Corrupted_image "Invalid magic number...");
+  type magic = P1 | P2 | P3 | P4 | P5 | P6
 
-    if List.mem !magic ["P1"; "P4"] then begin
-      Scanf.bscanf scanner "%u%[\t\n ]" (fun w _ -> width := w);
-      pass_comments ();
-      Scanf.bscanf scanner "%u%1[\t\n ]" (fun h _ -> height := h)
-    end else begin
-      Scanf.bscanf scanner "%u%[\t\n ]" (fun w _ -> width := w);
-      pass_comments ();
-      Scanf.bscanf scanner "%u%[\t\n ]" (fun h _ -> height := h);
-      pass_comments ();
-      Scanf.bscanf scanner "%u%1[\t\n ]" (fun mv _ -> max_val := mv)
-    end ;
+  let read_until_space : Buffer.t -> Reader.t -> unit = fun buf r ->
+    let rec loop () =
+      let c = Reader.input_char r in
+      if not (is_space c) then (Buffer.add_char buf c; loop ())
+    in loop ()
 
-    !magic,!width,!height,!max_val,scanner
+  let read_magic : Reader.t -> magic = fun r ->
+    let buf = Buffer.create 3 in
+    read_until_space buf r;
+    match Buffer.contents buf with
+    | "P1" -> P1 | "P2" -> P2 | "P3" -> P3
+    | "P4" -> P4 | "P5" -> P5 | "P6" -> P6
+    | _ -> raise (Corrupted_image "Invalid magic number...")
+
+  let read_until_non_space : Reader.t -> char = fun r ->
+    let rec loop () =
+      match Reader.input_char r with
+      | c when is_space c -> loop ()
+      | '#'               -> ignore (Reader.input_line r); loop ()
+      | c                 -> c
+    in loop ()
+
+  let read_token : Reader.t -> int = fun r ->
+    let c = read_until_non_space r in
+    let buf = Buffer.create 5 in
+    Buffer.add_char buf c; read_until_space buf r;
+    try int_of_string (Buffer.contents buf)
+    with _ -> raise (Corrupted_image "Invalid token...")
+
+  let read_header : Reader.t -> magic * int * int * int = fun r ->
+    let magic = read_magic r in
+    let width = read_token r in
+    let height = read_token r in
+    let max_val = if magic = P1 || magic = P4 then 1 else read_token r in
+    (magic, width, height, max_val)
 
   (*
    * Reads the size of a PPM image from a file.
    * Does not check if the file is correct. Only goes as far as the header.
    * Returns a couple (width, height)
    *)
-  let size ich =
-    let _,w,h,_,_ = read_header ich in
-    close_chunk_reader ich;
-    w, h
+  let size : Reader.t -> int * int = fun r ->
+    let (_,w,h,_) = read_header r in
+    Reader.close r; (w, h)
 
   (*
    * Read a PPM format image file.
@@ -77,103 +93,82 @@ module ReadPPM : ReadImage = struct
    *   - fn : the path to the file.
    * Raise the exception Corrupted_image if the file is not valid.
    *)
-  let parsefile (ich:chunk_reader) =
-    let prev_byte = ref None in
+  let parsefile : Reader.t -> image = fun r ->
     try
-      let magic,w,h,max_val,scanner =
-        (function | `Bytes 1 -> let b = ich (`Bytes 1) in
-                                prev_byte := Some b; b
-                  | orig -> ich orig )
-        |> read_header
-      in
-      let content : chunk_reader = function
-        | `Bytes 1 -> begin match !prev_byte with | Some x -> prev_byte:=None; x
-                                                  | None -> ich (`Bytes 1) end
-        | orig -> ich orig
-      in
-
+      let (magic, w, h, max_val) = read_header r in
       match magic with
-      | "P1" | "P2" ->
-       let image = create_grey ~max_val:max_val w h in
-       for y = 0 to h - 1 do
-         for x = 0 to w - 1 do
-           Scanf.bscanf scanner "%d%[\t\n ]" (fun v _ ->
-             write_grey image x y v)
-         done
-       done;
-       image
-
-     | "P3" ->
-       let image = create_rgb ~max_val:max_val w h in
-       for y = 0 to h - 1 do
-         for x = 0 to w - 1 do
-           Scanf.bscanf scanner "%d%[\t\n ]%d%[\t\n ]%d%[\t\n ]"
-             (fun r _ g _ b _ ->
-               write_rgb image x y r g b)
-         done
-       done;
-       image
-
-     | "P4" ->
-       let image = create_grey ~max_val:1 w h in
-       for y = 0 to h - 1 do
-         let x = ref 0 in
-         let byte = ref 0 in
-         while !x < w do
-           if !x mod 8 = 0 then
-             byte := chunk_byte content;
-           let byte_pos = !x mod 8 in
-           let v = (!byte lsr (7 - byte_pos)) land 1 in
-           write_grey image !x y v;
-           incr x
-         done
-       done;
-       image
-
-     | "P5" ->
-       let image = create_grey ~max_val:max_val w h in
-       for y = 0 to h - 1 do
-         for x = 0 to w - 1 do
-           if max_val <= 255 then (
-             let b0 = chunk_byte content in
-             write_grey image x y b0)
-           else (
-             let b0 = chunk_byte content in
-             let b1 = chunk_byte content in
-             write_grey image x y ((b0 lsl 8) + b1))
-         done
-       done;
-       image
-
-     | "P6" ->
-       let image = create_rgb ~max_val:max_val w h in
-       for y = 0 to h - 1 do
-         for x = 0 to w - 1 do
-           if max_val <= 255 then (
-             let r = chunk_byte content in
-             let g = chunk_byte content in
-             let b = chunk_byte content in
-             write_rgb image x y r g b)
-           else (
-             let r1 = chunk_byte content in
-             let r0 = chunk_byte content in
-             let g1 = chunk_byte content in
-             let g0 = chunk_byte content in
-             let b1 = chunk_byte content in
-             let b0 = chunk_byte content in
-             let r = (r1 lsl 8) + r0 in
-             let g = (g1 lsl 8) + g0 in
-             let b = (b1 lsl 8) + b0 in
-             write_rgb image x y r g b)
-         done
-       done;
-       image
-
-     | _ ->
-       raise (Corrupted_image "Invalid magic number...")
-    with End_of_file ->
-      raise (Corrupted_image "Truncated file")
-
+      | P1
+      | P2 ->
+          let image = create_grey ~max_val:max_val w h in
+          for y = 0 to h - 1 do
+            for x = 0 to w - 1 do
+              write_grey image x y (read_token r)
+            done
+          done;
+          Reader.close r; image
+      | P3 ->
+          let image = create_rgb ~max_val:max_val w h in
+          for y = 0 to h - 1 do
+            for x = 0 to w - 1 do
+              let cr = read_token r in
+              let cg = read_token r in
+              let cb = read_token r in
+              write_rgb image x y cr cg cb
+            done
+          done;
+          Reader.close r; image
+      | P4 ->
+          let image = create_grey ~max_val:1 w h in
+          for y = 0 to h - 1 do
+            let x = ref 0 in
+            let byte = ref 0 in
+            while !x < w do
+              if !x mod 8 = 0 then byte := Reader.input_byte r;
+              let byte_pos = !x mod 8 in
+              let v = (!byte lsr (7 - byte_pos)) land 1 in
+              write_grey image !x y v;
+              incr x
+            done
+          done;
+          Reader.close r; image
+      | P5 ->
+          let image = create_grey ~max_val:max_val w h in
+          for y = 0 to h - 1 do
+            for x = 0 to w - 1 do
+              if max_val <= 255 then (
+                let b0 = Reader.input_byte r in
+                write_grey image x y b0)
+              else (
+                let b0 = Reader.input_byte r in
+                let b1 = Reader.input_byte r in
+                write_grey image x y ((b0 lsl 8) + b1))
+            done
+          done;
+          Reader.close r; image
+      | P6 ->
+          let image = create_rgb ~max_val:max_val w h in
+          for y = 0 to h - 1 do
+            for x = 0 to w - 1 do
+              if max_val <= 255 then (
+                let cr = Reader.input_byte r in
+                let cg = Reader.input_byte r in
+                let cb = Reader.input_byte r in
+                write_rgb image x y cr cg cb)
+              else (
+                let r1 = Reader.input_byte r in
+                let r0 = Reader.input_byte r in
+                let g1 = Reader.input_byte r in
+                let g0 = Reader.input_byte r in
+                let b1 = Reader.input_byte r in
+                let b0 = Reader.input_byte r in
+                let cr = (r1 lsl 8) + r0 in
+                let cg = (g1 lsl 8) + g0 in
+                let cb = (b1 lsl 8) + b0 in
+                write_rgb image x y cr cg cb)
+            done
+          done;
+          Reader.close r; image
+    with End_of_file -> raise (Corrupted_image "Truncated file")
 end
 
 (*
@@ -290,4 +285,3 @@ let write_ppm fn img mode =
   );
 
   close_out och
-;;

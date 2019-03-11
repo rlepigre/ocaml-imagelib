@@ -1,38 +1,21 @@
-(*
- * This file is part of Imagelib.
- *
- * Imagelib is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Imabelib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Imabelib.  If not, see <http://www.gnu.org/licenses/>.
- *
- * Copyright (C) 2014 Rodolphe Lepigre.
- *)
-
-module Pixmap :
-  sig
-    open Bigarray
-    type pixmap8  = (int, int8_unsigned_elt , c_layout) Array2.t
-    type pixmap16 = (int, int16_unsigned_elt, c_layout) Array2.t
-
-    type t =
-      | Pix8  of pixmap8
-      | Pix16 of pixmap16
-
-    val create8  : int -> int -> t
-    val create16 : int -> int -> t
-
-    val get : t -> int -> int -> int
-    val set : t -> int -> int -> int -> unit
-  end
+(****************************************************************************)
+(* This file is part of the Imagelib library.                               *)
+(*                                                                          *)
+(* The Imagelib library is free software:  you can redistribute  it  and/or *)
+(* modify it under the terms of the GNU General Public License as published *)
+(* by the Free Software Foundation, either version 3 of the License, or (at *)
+(* your option) any later version.                                          *)
+(*                                                                          *)
+(* Imabelib is distributed in the hope that it will be useful,  but WITHOUT *)
+(* ANY WARRANTY;  without even the implied warranty of  MERCHANTABILITY  or *)
+(* FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for *)
+(* more details.                                                            *)
+(*                                                                          *)
+(* You should have received a copy of the GNU General Public License along  *)
+(* with the Imabelib library. If not, see <http://www.gnu.org/licenses/>.   *)
+(*                                                                          *)
+(* Copyright (C) 2014-2019 Rodolphe Lepigre.                                *)
+(****************************************************************************)
 
 type pixmap =
   | Grey  of Pixmap.t
@@ -72,10 +55,9 @@ exception Corrupted_image of string
 
 module type ReadImage =
   sig
-    open ImageUtil
     val extensions : string list
-    val size       : chunk_reader -> int * int
-    val parsefile  : chunk_reader -> image
+    val size       : Reader.t -> int * int
+    val parsefile  : Reader.t -> image
   end
 
 exception Not_yet_implemented of string

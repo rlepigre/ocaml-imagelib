@@ -1,7 +1,5 @@
 (library
- (name imagelib)
- (public_name imagelib)
- (synopsis "Image library")
- (modules :standard)
- (wrapped false)
- (libraries bigarray decompress))
+  (name imagelib)
+  (public_name imagelib.core)
+  (modules :standard)
+  (libraries imagelib.common bigarray decompress))

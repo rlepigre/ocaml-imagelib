@@ -16,6 +16,7 @@
  *
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
+open Imagelib_common
 open Image
 
 (* [size fn] returns a couple [(w,h)] corresponding to the size of the image

@@ -17,7 +17,8 @@
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
 open Pervasives
-open ImageUtil
+open Imagelib_common
+open Util
 open Image
 
 let xcf_signature = "gimp xcf "
@@ -39,11 +40,11 @@ module ReadXCF : ReadImage = struct
     | _          -> raise (Corrupted_image "Unknown version number...")
 
   let read_header ich =
-    let magic     = get_bytes ich 9 in
-    let version   = get_bytes ich 5 in
-    let width     = get_bytes ich 4 in
-    let height    = get_bytes ich 4 in
-    let base_type = get_bytes ich 4 in
+    let magic     = Reader.input_bytes ich 9 in
+    let version   = Reader.input_bytes ich 5 in
+    let width     = Reader.input_bytes ich 4 in
+    let height    = Reader.input_bytes ich 4 in
+    let base_type = Reader.input_bytes ich 4 in
     if magic <> xcf_signature then
       raise (Corrupted_image "Corrupted header...");
     let w  = int_of_str4 width in
@@ -64,10 +65,9 @@ module ReadXCF : ReadImage = struct
    * Note: the image is not checked for inconsistency, only the signature and
    * header are checked.
    *)
-  let size ich =
-    let hdr = read_header ich in
-    close_chunk_reader ich;
-    hdr.image_size
+  let size r =
+    let hdr = read_header r in
+    Reader.close r; hdr.image_size
 
   let parsefile _ =
     raise (Not_yet_implemented "ImageXCF.openfile") (* TODO  *)
