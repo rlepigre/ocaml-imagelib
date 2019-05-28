@@ -53,6 +53,8 @@ let openfile ~extension ich : image =
   let ext = String.lowercase_ascii extension in
   if List.mem ext ReadPNG.extensions
   then ReadPNG.parsefile ich else
+  if List.mem ext ReadGIF.extensions
+  then ReadGIF.parsefile ich else
   if List.mem ext ReadPPM.extensions
   then ReadPPM.parsefile ich else
   if List.mem ext ReadBMP.extensions
