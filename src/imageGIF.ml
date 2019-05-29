@@ -46,6 +46,8 @@ type decoder_state =
   }
 
 let bin_of_str ~clear_code (t:decoder_state) str =
+  (* TODO unroll this loop to deal with whole bytes at a time instead
+     of looping over each bit *)
   (*let color_table = String.init (1 lsl (min_size-1)) (fun i -> Char.chr i) in
   let width = 10 and height = 10 in
   let red = Pixmap.create8 width height
@@ -78,8 +80,9 @@ let bin_of_str ~clear_code (t:decoder_state) str =
           code_size := t.min_code_size ;
           symctr := 0;
           codectr := 1;
-        end;
-        carry := 0 end ;
+        end ;
+        carry := 0
+      end ;
       if !codectr = 1 lsl (!code_size-1) then
         (if !code_size < 12 then (incr code_size) ; codectr := 0) ;
       incr bit_offset
@@ -162,10 +165,9 @@ module ReadGIF : ReadImage = struct
     val retrieve_entry : instance -> int -> (int * int list) option
     val last_entry : instance -> int list
   end = struct
-    include Map.Make(struct type t = int
-        let compare = (compare : int -> int -> int) end)
+    type key = int
     type instance = {
-      t : (int * int list) t;
+      t : (int * int list) array;
       (* first element * complete list of elements.
          the list of elements is kept in reverse to speed up addition
       *)
@@ -176,9 +178,11 @@ module ReadGIF : ReadImage = struct
       clear_code : int ;
       eoi_code : int
     }
-    let clear t = { t with t = empty; cardinal = 0; }
+    let clear_array () = (* technically we only need 4097-color_table_size*)
+      Array.init 4097 (fun i -> i, [])
+    let clear t = { t with t = clear_array(); cardinal = 0; }
     let empty ~color_table_size ~lzw_min_size =
-      { t = (empty:(int * int list) t) ;
+      { t = clear_array() ;
         cardinal = 0;
         color_table_size ;
         clear_code = (1 lsl (lzw_min_size-1)) ;
@@ -186,32 +190,33 @@ module ReadGIF : ReadImage = struct
       }
 
     let retrieve_first dict symbol =
-      match find_opt symbol dict.t with
-      | Some (first, _) -> Some first
-      | None -> None
+      match dict.t.( symbol ) with
+      | _, [] -> None
+      | first, _ -> Some first
 
     let retrieve_entry dict symbol =
-      match find_opt symbol dict.t with
-      | Some (_, []) ->
-        raise (Corrupted_image "referencing uninitialized code")
-      | Some (first, lst) -> Some (first, List.rev lst)
-      | None -> None
+      match dict.t.( symbol ) with
+      | _, [] -> None
+      | first, lst -> Some (first, List.rev lst)
+
 
     let last_entry dict =
-    (* TODO throws exception if empty *)
-      max_binding dict.t |> snd |> snd |> List.rev
+      (* TODO throws exception if empty *)
+      dict.t.(dict.eoi_code + dict.cardinal -1)  |> snd |> List.rev
 
     let next_code (t:instance) (key:key) (v:int) : instance =
-      let entry = match find_opt key t.t with
-        | Some (first, lst) -> first, v::lst (* TODO yikes *)
-        | None -> assert (key < t.color_table_size) ;
+      let entry = match t.t.(key) with
+        | _, [] ->
+          assert (key < t.color_table_size) ;
           assert (key <> t.clear_code);
           assert (key <> t.eoi_code);
           key, [v; key]
+        | first, lst -> first, v::lst
       in
       let new_key = (t.eoi_code + t.cardinal) in
-      assert (not @@ mem new_key t.t);
-      {t with t = add new_key entry t.t ; cardinal = succ t.cardinal }
+      assert ([] = (snd t.t.(new_key)));
+      t.t.(new_key) <- entry ;
+      {t with cardinal = succ t.cardinal }
   end
 
   type image_descriptor_state = {
