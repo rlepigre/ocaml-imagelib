@@ -1,0 +1,7 @@
+(executable
+  (name imagetool)
+  (public_name imagetool)
+  (package imagelib-unix)
+  (modules :standard)
+  (libraries imagelib imagelib-unix)
+)

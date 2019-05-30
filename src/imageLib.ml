@@ -65,6 +65,8 @@ let writefile ~extension (och:ImageUtil.chunk_writer) i =
   let extension = String.lowercase_ascii extension in
   if List.mem extension ImagePNG.ReadPNG.extensions
   then ImagePNG.write_png och i else
+  if List.mem extension ImageGIF.ReadGIF.extensions
+  then ImageGIF.write och i else
   if List.mem extension ImagePPM.ReadPPM.extensions
   then ImagePPM.write_ppm och i Binary else
     raise (Not_yet_implemented extension)
