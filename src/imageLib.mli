@@ -65,6 +65,11 @@ module JPG :
 module GIF :
   sig
     module ReadGIF : ReadImage
+
+    val write : chunk_writer -> image -> unit
+    (** [write cw image] encodes [image] as a GIF and writes it to [cw].
+        At the moment compression is not supported, so the GIF will
+        NOT be uncompressed.*)
   end
 
 module XCF :

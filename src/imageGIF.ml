@@ -20,6 +20,7 @@ open Stdlib
 open ImageUtil
 open Image
 
+
 type gif_header_data = {
   version            : string ;
   image_size         : int * int ;
@@ -34,7 +35,7 @@ type gif_header_data = {
 type decoder_state =
   {
     carry_bits : int ; (* count bits in the current symbol *)
-    consumed_symbols_of_current_code : int ; (**)
+    consumed_symbols_of_current_code : int ;
 
     consumed_symbols : int ;
     (* total number of consumed symbols since last CLEAR *)
@@ -45,14 +46,12 @@ type decoder_state =
     min_code_size : int ;
   }
 
+let [@inline always] calc_clear_code lzw_min_size =
+  1 lsl (lzw_min_size -1)
+
 let bin_of_str ~clear_code (t:decoder_state) str =
   (* TODO unroll this loop to deal with whole bytes at a time instead
      of looping over each bit *)
-  (*let color_table = String.init (1 lsl (min_size-1)) (fun i -> Char.chr i) in
-  let width = 10 and height = 10 in
-  let red = Pixmap.create8 width height
-  and green = Pixmap.create8 width height
-    and blue = Pixmap.create8 width height in*)
   let code_size = ref t.code_size in
   let eoi_code = clear_code + 1 in
   let len = String.length str in
@@ -83,7 +82,7 @@ let bin_of_str ~clear_code (t:decoder_state) str =
         end ;
         carry := 0
       end ;
-      if !codectr = 1 lsl (!code_size-1) then
+      if !codectr = calc_clear_code !code_size then
         (if !code_size < 12 then (incr code_size) ; codectr := 0) ;
       incr bit_offset
     done ;
@@ -125,9 +124,12 @@ module ReadGIF : ReadImage = struct
     if width = 0 || height = 0 then
       raise (Corrupted_image "Invalid global GIF dimensions") ;
     let packed = chunk_byte ich in
-    let bgcol  = chunk_byte ich in
-    let pixar  = chunk_byte ich in
     let global_color_table = (packed lsr 7 = 1) in
+    let bgcol  = chunk_byte ich in
+    if bgcol <> 0 && not global_color_table  then
+      raise (Corrupted_image
+               "global background color but no global color table");
+    let pixar  = chunk_byte ich in
     let size_glob_col_tbl = packed land 0b111 in
     (* TODO fails on wat.gif
        if global_color_table && size_glob_col_tbl = 0 then
@@ -178,15 +180,17 @@ module ReadGIF : ReadImage = struct
       clear_code : int ;
       eoi_code : int
     }
-    let clear_array () = (* technically we only need 4097-color_table_size*)
-      Array.init 4097 (fun i -> i, [])
+    let clear_array () =
+      (* technically we only need 2^code_size,
+         max is 12 bits, so we just preallocate that: *)
+      Array.init (4096) (fun i -> i, [])
     let clear t = { t with t = clear_array(); cardinal = 0; }
     let empty ~color_table_size ~lzw_min_size =
       { t = clear_array() ;
         cardinal = 0;
         color_table_size ;
-        clear_code = (1 lsl (lzw_min_size-1)) ;
-        eoi_code = (1 lsl (lzw_min_size-1)) + 1 ;
+        clear_code = calc_clear_code lzw_min_size ;
+        eoi_code = (calc_clear_code lzw_min_size) + 1 ;
       }
 
     let retrieve_first dict symbol =
@@ -214,9 +218,16 @@ module ReadGIF : ReadImage = struct
         | first, lst -> first, v::lst
       in
       let new_key = (t.eoi_code + t.cardinal) in
-      assert ([] = (snd t.t.(new_key)));
-      t.t.(new_key) <- entry ;
-      {t with cardinal = succ t.cardinal }
+      if new_key = 4096 then begin
+        (* we have reached the maximum number of entries in the table.
+           at this point we stop accepting new codes until a CLEAR is issued
+           (which will reset this table) *)
+        t
+      end else begin
+        assert ([] = (snd t.t.(new_key)));
+        t.t.(new_key) <- entry ;
+        {t with cardinal = succ t.cardinal }
+      end
   end
 
   type image_descriptor_state = {
@@ -233,20 +244,40 @@ module ReadGIF : ReadImage = struct
   let process_image_descriptor_subblock
       ~color_table ~color_table_size
       ~image ~lzw_min_size original_state subblock =
-    let clear_code = 1 lsl (lzw_min_size -1) in
-    let eoi_code = 1 lsl (lzw_min_size -1) + 1 in
-    let [@inline always] next_coord ({x ; y; _ } as state) =
-      if x + 1 = image.width then begin
-        if y >= image.height then
-          raise (Corrupted_image "blew y dimension");
-        {state with x = 0; y = y+1 }
-      end else begin
+    let clear_code = calc_clear_code lzw_min_size in
+    let eoi_code = clear_code + 1 in
+    let used_coord = ref false in (* keep track of emitted pixels to make sure we don't overwrite, and that we emit a symbol for each pixel *)
+    let [@inline always] next_coord ({x=old_x ; y = old_y; _ } as state) =
+      assert (!used_coord);
+      let x, y =
+        if old_x + 1 = image.width
+        then 0, old_y+1
+        else old_x+1, old_y
+      in
+      used_coord := false;
+      let state =
         if x >= image.width then
           raise (Corrupted_image "blew x dimension");
-        {state with x = x+1; y } end in
+        if y > image.height then
+          raise (Corrupted_image "blew y dimension");
+        if y = image.height && x > 0 then
+          raise (Corrupted_image "blew past end position");
+        {state with x; y }
+      in
+      if state.x >= image.width || state.y >= image.height
+         || state.x < 0 || state.y < 0 then
+        used_coord := true; (* don't write out of bounds *)
+      state
+    in
     let [@inline always] emit_pixel image x y symbol =
       assert (symbol <> clear_code);
       assert (symbol <> eoi_code);
+      if (!used_coord) then begin
+        invalid_arg @@ Printf.sprintf "EMIT  x:%d/%d y:%d/%d sym:%d min:%d\n"
+          x image.width y  image.height symbol lzw_min_size
+      end;
+      assert (not !used_coord);
+      used_coord := true;
       let offset = symbol * 3 in
       write_rgb image x y
         (Char.code color_table.[offset  ])
@@ -254,14 +285,17 @@ module ReadGIF : ReadImage = struct
         (Char.code color_table.[offset +2])
     in
     let [@inline always] process_symbols process_state symbols =
-      List.fold_left (fun state ->
-          function
-          | symbol when symbol = clear_code ->
+      let [@inline always] rec loop state = function
+        | [] -> state
+        | hd::tl ->
+          begin match hd with
+          | (symbol:int) when symbol = clear_code ->
             {state with previous_symbol = symbol ;
                         must_clear = false ;
                         dict = Dict.clear state.dict}
           | _symbol when state.must_clear ->
-            raise (Corrupted_image "doesn't start with clear code")
+            raise (Corrupted_image ("Doesn't start with clear code: "
+                                    ^ Char.escaped (Char.chr _symbol)))
           | symbol when symbol = eoi_code ->
             {state with previous_symbol = symbol}
           | symbol when state.previous_symbol = clear_code ->
@@ -308,7 +342,9 @@ module ReadGIF : ReadImage = struct
                   ) state (Dict.last_entry next_dict) in
                 {state with previous_symbol = coded_symbol }
             end
-        ) process_state symbols
+          end |> fun state ->
+          loop state tl
+      in loop process_state symbols
     in
     match bin_of_str ~clear_code:original_state.clear_code
             original_state.decoder subblock with
@@ -349,7 +385,7 @@ module ReadGIF : ReadImage = struct
       || (top + height > global_height) then
       raise (Corrupted_image "Invalid image descriptor block dimensions");
 
-    if lzw_min_size < 3 || lzw_min_size > 9 then
+    if lzw_min_size < 3 || lzw_min_size > 12 then
       raise (Corrupted_image "Invalid LZW minimum code size") ;
 
     (* feature flags:
@@ -384,18 +420,19 @@ module ReadGIF : ReadImage = struct
       | 0, `Initial ->
         raise (Corrupted_image
                  "GIF image descriptor block contained single empty subblock")
-      | 0, `Partial _ ->
+      | 0, `Partial (_:image_descriptor_state) ->
         raise
           (Corrupted_image "GIF image descriptor block not enough subblocks")
       | 0, `Complete -> ()
-      | _, `Complete ->
-        raise (Corrupted_image "complete but not really")
+      | ch, `Complete ->
+        raise (Corrupted_image
+                 (Printf.sprintf "complete but not really %#x" ch))
       | encoded_size, (`Initial | `Partial _ as state) ->
         let state =
           match state with
           | `Partial state -> state
           | `Initial ->
-            let clear_code = (1 lsl (lzw_min_size-1)) in
+            let clear_code = calc_clear_code lzw_min_size in
             { previous_symbol = clear_code ;
               clear_code ;
               eoi_code = clear_code +1 ;
@@ -443,7 +480,6 @@ module ReadGIF : ReadImage = struct
         gct := get_bytes ich gct_bytesize ;
     in
     let [@inline always] rec parse_blocks acc =
-      (* 20. Image Descriptor*)
       match (get_bytes ich 1).[0] with
       | '\x3b' -> List.rev acc (* End of file *)
 
@@ -466,17 +502,21 @@ module ReadGIF : ReadImage = struct
         let image = process_image_descriptor_block ich hdr !gct in
         parse_blocks (image::acc)
 
-      | _ -> invalid_arg "TODO unknown block type"
+      | c -> raise (Not_yet_implemented
+                      (Printf.sprintf "unknown block type %C" c))
     in
     let image =
       let w,h = hdr.image_size in
-      let _image = create_rgb w h in
+      let _image =
+        (* TODO initialize with bgcolor if there's a global color table *)
+        create_rgb w h in
       (* TODO blit partial images into main image and return that instead *)
       let tODO_partial_images = parse_blocks [] in
       match tODO_partial_images with
-      | [image] -> image
       | [] ->
         raise (Corrupted_image "GIF did not contain an image descriptor block")
+      | [image] ->
+        image
       | _ ->
         raise (Not_yet_implemented
                  "multiple image descriptor blocks in GIF file")
@@ -484,3 +524,271 @@ module ReadGIF : ReadImage = struct
     ImageUtil.close_chunk_reader ich ;
     image
 end
+
+
+(* this function emits an image encoded as GIF *)
+let write (cw:chunk_writer) (original_image:image) =
+
+  let module ColorTable : Hashtbl.S with type key = int =
+    Hashtbl.Make(struct
+      type t = int
+      let equal (a:int) (b:int) = a = b
+      let hash a = a
+    end) in
+
+  (* The purposed of this hashtable is to keep track of how many
+     different colors we have seen so far, such that we may produce
+     an adequately sized color table (incidentally we also track
+     the number of times each of these colors occur as the element): *)
+  let color_count = ColorTable.create 256 in
+
+  let packed_plane =
+    let [@inline always] pack_int r g b =
+      b lor (g lsl 8) lor (r lsl 16) in
+    let [@inline always] register_count packed =
+      try ColorTable.replace color_count packed
+            (succ @@ ColorTable.find color_count packed) with
+      | Not_found -> ColorTable.add color_count packed 1 in
+    (* normalize it to 24bit RGB *)
+    let open Bigarray in
+    match original_image.pixels with
+    | Grey (Pix8 old_plane) ->
+      (* weighted according to wavelengths:
+         R: 30%   G: 59%   B:11% *)
+      let open Bigarray in
+      let width = Array2.dim1 old_plane in
+      let height = Array2.dim2 old_plane in
+      let target_plane = Array2.create Int C_layout width height in
+      for x = 0 to width -1 do
+        for y = 0 to height -1 do
+          let v = Array2.get old_plane x y in
+          (* instead of e.g. (v * 30)/ 100 we use the same fraction
+             of 256 instead of 100 so we can divide by shifting 8 places *)
+          let v_r = ((v*77) lsr 8)
+          and v_g = ((v*151) lsr 8)
+          and v_b = ((v*28) lsr 8) in
+          let packed = pack_int v_r v_g v_b in
+          register_count packed ;
+          Array2.set target_plane x y packed
+        done
+      done ;
+      target_plane
+    | Grey (Pix16 old_plane) ->
+      let width = Array2.dim1 old_plane in
+      let height = Array2.dim2 old_plane in
+      let target_plane = Array2.create Int C_layout width height in
+      for x = 0 to width -1 do
+        for y = 0 to height -1 do
+          let v = Array2.get old_plane x y in
+          let v_r = (v*77) lsr 16
+          and v_g = (v*151) lsr 16
+          and v_b = (v*28) lsr 16 in
+          let packed = pack_int v_r v_g v_b in
+          register_count packed ;
+          Array2.set target_plane x y packed
+        done
+      done ;
+      target_plane
+    | RGB (Pix16 old_red, Pix16 old_green, Pix16 old_blue) ->
+      let width = Array2.dim1 old_red in
+      let height = Array2.dim2 old_red in
+      (* TODO assert that the other arrays have same dims*)
+      let target_plane = Array2.create Int C_layout width height in
+      for x = 0 to Array2.dim1 old_red -1 do
+        for y = 0 to Array2.dim2 old_red -1 do
+          (* TODO not sure this is correct, but here we go:*)
+          let v_r = (Array2.get old_red   x y) lsr 8 in
+          let v_g = (Array2.get old_green x y) lsr 8 in
+          let v_b = (Array2.get old_blue  x y) lsr 8 in
+          let packed = pack_int v_r v_g v_b in
+          register_count packed ;
+          Array2.set target_plane x y packed
+        done
+      done ;
+      target_plane
+    | RGB (Pix8 red, Pix8 green, Pix8 blue) ->
+      let width = Array2.dim1 red in
+      let height = Array2.dim2 red in
+      let target_plane = Array2.create Int C_layout width height in
+      for x = 0 to width -1 do
+        for y = 0 to height -1 do
+          let packed = pack_int
+            (Array2.get red   x y)
+            (Array2.get green x y)
+            (Array2.get blue  x y) in
+          register_count packed ;
+          Array2.set target_plane x y packed
+        done
+      done ;
+      target_plane
+    | RGB _ ->
+      raise (Corrupted_image
+               "Something is wrong, color planes of different resolution")
+    | GreyA _
+    | RGBA _ ->
+      raise (Not_yet_implemented "GIF does not yet support transparency")
+  in
+
+  let color_table_shift =
+    (* here we try to round the cardinal of color_count *UP* to
+       the nearest power of two *)
+    let rec loop bits = function
+      | 0 -> max 1 bits
+      | v -> loop (succ bits) (v lsr 1)
+    in
+    let bits = loop 0 (ColorTable.length color_count-1) in
+    bits
+  in let color_table_size = 1 lsl color_table_shift in
+
+  assert (color_table_size >= ColorTable.length color_count);(*TODO*)
+
+  let [@inline always] pack_uint16le v =
+    let buf = Bytes.create 2 in
+    Bytes.unsafe_set buf 0 @@ Char.chr (v land 0xff) ;
+    Bytes.unsafe_set buf 1 @@ Char.chr ((v land 0xff00) lsr 8) ;
+    Bytes.unsafe_to_string buf
+  in
+
+  let flags =
+    0xf0 (*0x80 | (7 lsl 4): palette stuff *) (* global color table *)
+    lor (0b111 land (color_table_shift-1))
+    (* 2, 4, 8, 16, 32, 64, 256 *)
+    (* 2 << (this value) = global color table size*)
+  in
+
+  let lzw_min_size = 1 + color_table_shift in
+
+  chunk_write cw "GIF89a";
+  chunk_write cw @@ pack_uint16le original_image.width ;
+  chunk_write cw @@ pack_uint16le original_image.height ;
+  chunk_write_char cw @@ Char.chr flags ; (* flags *)
+  chunk_write_char cw '\x00' ; (* bgcol *)
+  chunk_write_char cw '\x00' ; (* pixar *)
+
+  (* now follows the global color table: *)
+
+    (* color_table: maps from 0..256 to the rgb byte value
+     color_table_inv: maps from packed rgb value int to 0..256 *)
+  let color_table = ColorTable.create color_table_size in
+  let color_table_inv = ColorTable.create color_table_size in
+  let () =
+    (* initialize to black:*)
+    for i = 0 to color_table_size do
+      ColorTable.replace color_table i "\x34\x33\000" (* just fill *)
+    done ;
+    let place = ref 0 in
+    (* TODO ideally sort this first so the most used will have the
+       lowest number? *)
+    ColorTable.to_seq_keys color_count
+    |> Seq.iter (fun key ->
+        let [@inline always] pack_rgb24 v =
+          let buf = Bytes.create 3 in
+          Bytes.unsafe_set buf 0 @@ Char.chr ((v land 0xff0000) lsr 16) ;
+          Bytes.unsafe_set buf 1 @@ Char.chr ((v land 0xff00) lsr 8) ;
+          Bytes.unsafe_set buf 2 @@ Char.chr (v land 0xff) ;
+          Bytes.unsafe_to_string buf in
+        let packed = pack_rgb24 key in
+        ColorTable.replace color_table !place packed ;
+        ColorTable.replace color_table_inv key !place ;
+        incr place
+      ) ;
+    (* emit global color table: *)
+    for i = 0 to color_table_size -1 do
+      let color = (ColorTable.find color_table i) in
+      chunk_write cw color
+    done ;
+  in
+
+  (* TODO if we support transparency, emit a Graphic Control Extension block *)
+
+  (* Emit an Image Descriptor block: *)
+  chunk_write_char cw '\x2c';
+  chunk_write cw (pack_uint16le 0); (* left: offset*)
+  chunk_write cw (pack_uint16le 0); (* top: offset *)
+  chunk_write cw (pack_uint16le original_image.width);
+  chunk_write cw (pack_uint16le original_image.height);
+  chunk_write_char cw '\x00'; (* flags *)
+
+  (*22. Table Based Image Data.*)
+  chunk_write_char cw @@ Char.chr lzw_min_size;
+
+  let pixels = original_image.height * original_image.width in
+  assert (pixels > 0);
+  let pixel = ref 0 in
+  let output_buffer = Bytes.make 255 '\000'
+  and output_offset = ref 0 in
+  let [@inline always] reset_output_buffer () =
+    output_offset := 0;
+    (* TODO DEBUG Bytes.fill output_buffer 0 255 '\000' *)
+  and [@inline always] flush_output_buffer () =
+    let subblock = Bytes.sub_string output_buffer 0 (!output_offset) in
+    chunk_write_char cw @@ Char.chr (String.length subblock);
+    chunk_write cw subblock;
+  and [@inline always] buffer_put char =
+    Bytes.set output_buffer !output_offset char;
+    incr output_offset
+  in
+  let x = ref 0 in
+  let y = ref 0 in
+  let code_size = ref (lzw_min_size+1) in
+  let clear_code = calc_clear_code !code_size in
+  let eoi_code = clear_code + 1 in
+  let carry = ref clear_code in
+  let carry_bits = ref !code_size in
+  let symbol_ctr = ref 0 in
+  let byte_ctr = ref 0 in
+  while !pixel < pixels do
+
+    let packed = Bigarray.Array2.get packed_plane !x !y in
+    let idx = ColorTable.find color_table_inv packed in
+
+    incr symbol_ctr;
+    if !code_size <> 12 && !symbol_ctr = calc_clear_code !code_size then begin
+      incr code_size ;
+      symbol_ctr := 0;
+    end ;
+    carry := !carry lor (idx lsl !carry_bits) ;
+    carry_bits := !carry_bits + !code_size ;
+
+    if !pixel+1 = pixels then begin
+      (* Prepare for writing the End-Of-Image (EOI) marker: *)
+      carry := !carry lor (eoi_code lsl !carry_bits) ;
+      carry_bits := !carry_bits + !code_size;
+    end;
+    while (!carry_bits >= 8) do
+      buffer_put @@ Char.chr (!carry land 0xff)  ;
+      incr byte_ctr;
+      carry := !carry lsr 8;
+      carry_bits := !carry_bits - 8;
+    done ;
+    if !byte_ctr > 255 - 100 && !carry_bits <= 0 then begin
+      (* carrying across subblocks seems to work poorly, so we try to get a
+         byte-aligned subblock *)
+      flush_output_buffer () ;
+      reset_output_buffer () ;
+      byte_ctr := 0;
+    end ;
+    incr pixel ;
+    if !x + 1 = original_image.width then begin
+      x := 0 ;
+      incr y ;
+    end else incr x;
+  done ;
+  assert (!pixel = pixels);
+  while !carry_bits > 0 do
+    buffer_put @@ Char.chr (!carry land 0xff) ;
+    carry := !carry lsr 8;
+    carry_bits := !carry_bits - 8;
+    incr byte_ctr;
+  done ;
+  assert (!carry = 0);
+  assert (!carry_bits <= 0);
+
+  if !byte_ctr <> 0 then begin
+    flush_output_buffer ();
+  end ;
+
+  chunk_write_char cw '\x00'; (* END IMAGE DESCRIPTOR SUBBLOCKS *)
+
+  (* END OF GIF: *)
+  chunk_write_char cw '\x3b'

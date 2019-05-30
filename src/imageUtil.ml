@@ -254,3 +254,16 @@ let int_to_str4 i : Bytes.t =
   Bytes.set s 2 @@ char_of_int ((i lsr 8) land mask);
   Bytes.set s 3 @@ char_of_int (i land mask);
   s
+
+(* Colorize a block using VT100 rgb88 escape codes *)
+let colorize_rgb888 r g b =
+  Printf.sprintf "\x1b[38;2;%d;%d;%dm⬛\x1b[0m"
+    (r land 0xff) (g land 0xff) (b land 0xff)
+(* Same as above, takes the bytesfrom a string *)
+let colorize_rgb888_str ?(offset=0) color =
+  colorize_rgb888
+    (Char.code color.[0+offset])
+    (Char.code color.[1+offset])
+    (Char.code color.[2+offset])
+let colorize_rgb888_int color =
+  colorize_rgb888 (color lsl 16) (color lsr 8) color
