@@ -495,7 +495,8 @@ module ReadGIF : ReadImage = struct
 
           (* | 0xfe -> (* comment *) *)
           (* | 0xff -> (* application *) *)
-          | _ -> raise (Not_yet_implemented "Extension")
+          | unknown -> raise @@ Not_yet_implemented
+              (Printf.sprintf "GIF Extension %#X unknown" unknown)
         end
 
       | '\x2c' -> (* Image Descriptor*)
@@ -528,6 +529,9 @@ end
 
 (* this function emits an image encoded as GIF *)
 let write (cw:chunk_writer) (original_image:image) =
+
+  if original_image.height > 0xffff || original_image.width > 0xffff then
+    raise @@ Invalid_argument ("Image dimensions too large for GIF") ;
 
   let module ColorTable : Hashtbl.S with type key = int =
     Hashtbl.Make(struct
