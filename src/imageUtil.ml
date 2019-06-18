@@ -255,8 +255,25 @@ let int_to_str4 i : Bytes.t =
   Bytes.set s 3 @@ char_of_int (i land mask);
   s
 
-(* Colorize a block using VT100 rgb88 escape codes *)
-let colorize_rgb888 r g b =
+(* Colorize a block using IRC rgb888 escape codes *)
+let colorize_rgb888_irc r g b _a =
+  (* 24-bit format from
+     https://github.com/shabble/irssi-docs/wiki/Notes-256-Colour
+     https://github.com/irssi/irssi/pull/48/files#diff-47cea7aba67a0854afea07a5577633dbR154
+  *)
+  assert (r <= 0xff && g <= 0xff && b <= 0xff) ; (* TODO normalize 16-bit*)
+  let flags = 1 (* land 1 = 1 : background color
+                   land 1 = 0 : foreground color *) in
+  let bump flags i x = if x > 0x20
+    then flags, Char.chr x
+    else flags lor (0x10 lsl i), Char.chr (0x20 + x) in
+  let flags, r = bump flags 0 r in
+  let flags, g = bump flags 1 g in
+  let flags, b = bump flags 2 b in
+  let flags = Char.chr (flags + 0x20) in
+  Printf.sprintf "\x04#%c%c%c%c " r g b flags
+(* Colorize a block using VT100 rgb888 escape codes *)
+let colorize_rgb888 r g b _alpha =
   Printf.sprintf "\x1b[38;2;%d;%d;%dm⬛\x1b[0m"
     (r land 0xff) (g land 0xff) (b land 0xff)
 (* Same as above, takes the bytesfrom a string *)
