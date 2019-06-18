@@ -17,6 +17,13 @@
  * Copyright (C) 2014-2019 Rodolphe Lepigre.
  *)
 
+
+(* https://create.stephan-brumme.com/flexigif-lossless-gif-lzw-optimization/
+https://stackoverflow.com/questions/1196322/how-to-create-an-animated-gif-in-net
+https://www.fileformat.info/format/gif/sample/index.htm
+https://www.fileformat.info/format/gif/egff.htm
+*)
+
 open ImageUtil
 open Image
 
@@ -166,6 +173,8 @@ module ReadGIF : ReadImage = struct
     val retrieve_first : instance -> int -> int option
     val retrieve_entry : instance -> int -> (int * int list) option
     val last_entry : instance -> int list
+    val cardinal : instance -> int
+    val redim : instance -> color_table_size:int -> clear_code:int -> instance
   end = struct
     type key = int
     type instance = {
@@ -185,6 +194,11 @@ module ReadGIF : ReadImage = struct
          max is 12 bits, so we just preallocate that: *)
       Array.init (4096) (fun i -> i, [])
     let clear t = { t with t = clear_array(); cardinal = 0; }
+    let redim t ~color_table_size ~clear_code =
+      {t with color_table_size ;
+              clear_code ;
+              eoi_code = clear_code + 1;
+      }
     let empty ~color_table_size ~lzw_min_size =
       { t = clear_array() ;
         cardinal = 0;
@@ -192,6 +206,8 @@ module ReadGIF : ReadImage = struct
         clear_code = calc_clear_code lzw_min_size ;
         eoi_code = (calc_clear_code lzw_min_size) + 1 ;
       }
+
+    let cardinal t = t.cardinal
 
     let retrieve_first dict symbol =
       match dict.t.( symbol ) with
@@ -293,9 +309,11 @@ module ReadGIF : ReadImage = struct
             {state with previous_symbol = symbol ;
                         must_clear = false ;
                         dict = Dict.clear state.dict}
-          | _symbol when state.must_clear ->
-            raise (Corrupted_image ("Doesn't start with clear code: "
-                                    ^ Char.escaped (Char.chr _symbol)))
+          | symbol when state.must_clear ->
+            raise (Corrupted_image (Printf.sprintf
+                                      "Doesn't start with clear code (%#x): %#x (dict:%d)"
+                                      clear_code symbol
+                                      (Dict.last_entry state.dict |> List.length)))
           | symbol when symbol = eoi_code ->
             {state with previous_symbol = symbol}
           | symbol when state.previous_symbol = clear_code ->
@@ -352,7 +370,7 @@ module ReadGIF : ReadImage = struct
       begin match process_symbols original_state symbols with
         | state when state.previous_symbol = eoi_code ->
           if state.x = 0 && state.y = image.height
-          then (`Complete)
+          then (Printf.printf "symbols:%d\n%!" (Dict.cardinal state.dict); `Complete state.dict)
           else raise (Corrupted_image
                         "GIF decoder produced image of unexpected dimensions")
         | _ -> raise (Corrupted_image "no EOI at end")
@@ -365,7 +383,7 @@ module ReadGIF : ReadImage = struct
         | state -> `Partial state
       end
 
-  let process_image_descriptor_block ich hdr gct =
+  let process_image_descriptor_block ?compression_dict:original_compression_dict ich hdr gct  =
     let block  = get_bytes ich (4+4+1+1) in (* four 16-bit coordinates *)
     let left   = uint16le ~off:0 block in
     let top    = uint16le ~off:2 block in     (* 4 : coordinates *)
@@ -374,9 +392,10 @@ module ReadGIF : ReadImage = struct
 
     let flags = Char.code block.[8] in        (* 1 : feature flags *)
     let local_color_table_size = 2 lsl (flags land 0b111) in
-    let lzw_min_size = Char.code block.[9] in (* 1: minimum code size  *)
+    let lzw_min_size = Char.code block.[9] in (* 1: minimum/root code size  *)
 
     let lzw_min_size = lzw_min_size + 1 in
+    (*Printf.printf "TODO lzw_min_size %d\n%!" lzw_min_size;*)
 
 
     if let global_width, global_height = hdr.image_size in
@@ -391,6 +410,8 @@ module ReadGIF : ReadImage = struct
     (* feature flags:
        has_local_color_table  = flags & 0x80
        has_interlace          = flags & 0x40
+(* TODO on interlace:
+https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
        has_sorted_color_table = flags & 0x20
        color_table_size       = 2 << (flags & 0b111)
     *)
@@ -423,8 +444,8 @@ module ReadGIF : ReadImage = struct
       | 0, `Partial (_:image_descriptor_state) ->
         raise
           (Corrupted_image "GIF image descriptor block not enough subblocks")
-      | 0, `Complete -> ()
-      | ch, `Complete ->
+      | 0, `Complete dict -> dict
+      | ch, `Complete _dict ->
         raise (Corrupted_image
                  (Printf.sprintf "complete but not really %#x" ch))
       | encoded_size, (`Initial | `Partial _ as state) ->
@@ -438,7 +459,9 @@ module ReadGIF : ReadImage = struct
               eoi_code = clear_code +1 ;
               lzw_code_size = lzw_min_size ;
               must_clear = true ;
-              dict = Dict.empty ~color_table_size ~lzw_min_size ;
+              dict = (match original_compression_dict with
+                | None -> Dict.empty ~color_table_size ~lzw_min_size
+                | Some dict -> Dict.redim dict ~color_table_size ~clear_code) ;
               x = 0; y = 0;
               decoder = {
                 carry_bits = 0 ;
@@ -456,8 +479,8 @@ module ReadGIF : ReadImage = struct
             state subblock in
         process_subblock state
     in
-    process_subblock `Initial ;
-    image
+    let dict = process_subblock `Initial in
+    dict, image
 
 
   let parsefile ich =
@@ -479,29 +502,108 @@ module ReadGIF : ReadImage = struct
             immediately follow the Logical Screen Descriptor.*)
         gct := get_bytes ich gct_bytesize ;
     in
-    let [@inline always] rec parse_blocks acc =
+    Printexc.record_backtrace true;
+    let [@inline always] rec parse_blocks ((compression_dict:Dict.instance option), acc) =
       match (get_bytes ich 1).[0] with
       | '\x3b' -> List.rev acc (* End of file *)
 
-      | '\x21' -> (* Extension*)
-        begin match chunk_byte ich with
+      | '\x21' -> (* Extension Introducer *)
+        let extension_label = chunk_byte ich in
+        Printf.printf "Extension %#x\n%!" extension_label;
+        begin match extension_label with
           | 0xf9 -> (* Graphic Control Extension *)
             let len = chunk_byte ich in
+            (* TODO maybe just assert (len = 4) *)
+            assert (len = 4);
             let body = get_bytes ich (len+1) in
-            (* TODO transparency and stuff*)
             if body.[len] <> '\x00' then
               raise (Corrupted_image "GCE: missing end of block") ;
-            parse_blocks acc (* <-- next block *)
+            let packed = int_of_char body.[0] in
+            (* TODO
+               delaytime <- body.(1..2)
+               (* ^-- 100ths of seconds before displaying next *)
+               transparent color index <- body.(3)
+               (* ^-- presumably index into global color table. should presumably be zero if use_transparent_color is 0 *)
+             *)
+            let use_transparent_color = packed land 1 in
+            if use_transparent_color = 1 then
+              raise @@ Not_yet_implemented "TODO use transparent color";
+            let user_input_flag = (packed lsr 1) land 1 in
+            (* The Reserved subfield is not used in GIF89a and
+               is always set to 0: *)
+            assert (0 = packed lsr 5);
+            (* TODO maybe assert that GDM must be 0 if there's no transparency at play? *)
+            (* http://webreference.com/content/studio/disposal.html *)
+            let graphics_disposal_method = match (packed lsr 2) land 0b111 with
+              | 0 -> Printf.printf "graphic disposal method not specified\n%!"
+              (* Use this option to replace one full-size, non-transparent frame with another. *)
+
+              | 1 -> Printf.printf "do not dispose of graphic\n%!"
+              (*  In this option, any pixels not covered up by the next frame continue to display. This is the setting used most often for optimized animations. In the flashing light animation, we wanted to keep the first frame displaying, so the subsequent optimized frames would just replace the part that we wanted to change. That's what Do Not Dispose does. *)
+
+              | 2 -> Printf.printf "overwrite graphic with background color\n%!"
+              (* The background color or background tile - rather than a previous frame - shows through transparent pixels. In the GIF specification, you can set a background color. In Netscape, it's the page's background color or background GIF that shows through. *)
+
+              | 4 -> Printf.printf "overwrite graphic with previous graphic\n%!"
+              (* The background color or background tile - rather than a previous frame - shows through transparent pixels. In the GIF specification, you can set a background color. In Netscape, it's the page's background color or background GIF that shows through.
+The thing to remember about Restore to Previous is that it's not necessarily the first frame of the animation that will be restored but the last frame set to Unspecified or Do Not Dispose*)
+
+              | _ -> raise @@ Corrupted_image
+                  ("GIF: Graphics Disposal Method multiple bits set")
+            in
+            let _TODO = user_input_flag, graphics_disposal_method in
+            parse_blocks (compression_dict, acc) (* <-- next block *)
 
           (* | 0xfe -> (* comment *) *)
-          (* | 0xff -> (* application *) *)
+
+          | 0xff -> (* ApplicationExtension *)
+            if chunk_byte ich <> 0x0b then (* 0x0b = 8+3 *)
+              raise (Corrupted_image "GIF ApplicationExtension length not 0x0B");
+            let identifier = get_bytes ich 8 in
+            (* TODO technically identifier must be printable ASCII too*)
+            let authentcode = get_bytes ich 3 in
+            begin match identifier, authentcode with
+              | "NETSCAPE", "2.0" ->
+                (* Netscape animated GIF looping extension
+                   http://www.vurdalakov.net/misc/gif/netscape-looping-application-extension*)
+                let subblock_len = chunk_byte ich in
+                begin match subblock_len with
+                  | 0 -> raise (Not_yet_implemented "GIF ApplicationExtension TODO subblock len 0")
+                  | 3 ->
+                    let subblock = get_bytes ich subblock_len in
+                    if subblock.[0] <> '\x01' then
+                      raise @@ Corrupted_image
+                        (Printf.sprintf
+                           "GIF NETSCAPE 2.0 block unknown sub-block ID") ;
+                    let loop_count = uint16le ~off:1 subblock in
+                    (* TODO 0x00 (0) means infinite loop. *)
+                    Printf.printf "TODO NETSCAPE EXTENSION loop count:%d\n%!" loop_count ;
+                    let terminator = chunk_byte ich in
+                    if terminator <> 0 then
+                      raise @@ Corrupted_image
+                        (Printf.sprintf
+                           "GIF ApplicationExtension subblock terminator expected 0x00, got %#x"
+                        terminator)
+                  | _ ->
+                    raise @@ Corrupted_image
+                      (Printf.sprintf
+                         "GIF NETSCAPE 2.0 block of weird length %d"
+                         subblock_len)
+                end
+              | _ ->
+                raise @@ Corrupted_image
+                  (Printf.sprintf
+                     "Unknown GIF ApplicationExtension %S:%S"
+                     identifier authentcode)
+            end ;
+            parse_blocks (compression_dict, acc)
           | unknown -> raise @@ Not_yet_implemented
-              (Printf.sprintf "GIF Extension %#X unknown" unknown)
+              (Printf.sprintf "GIF Extension %#x unknown" unknown)
         end
 
       | '\x2c' -> (* Image Descriptor*)
-        let image = process_image_descriptor_block ich hdr !gct in
-        parse_blocks (image::acc)
+        let dict, image = process_image_descriptor_block ?compression_dict ich hdr !gct  in
+        parse_blocks (Some dict, (image::acc))
 
       | c -> raise (Not_yet_implemented
                       (Printf.sprintf "unknown block type %C" c))
@@ -512,7 +614,7 @@ module ReadGIF : ReadImage = struct
         (* TODO initialize with bgcolor if there's a global color table *)
         create_rgb w h in
       (* TODO blit partial images into main image and return that instead *)
-      let tODO_partial_images = parse_blocks [] in
+      let tODO_partial_images = parse_blocks (None, []) in
       match tODO_partial_images with
       | [] ->
         raise (Corrupted_image "GIF did not contain an image descriptor block")
@@ -530,14 +632,17 @@ end
 (* this function emits an image encoded as GIF *)
 let write (cw:chunk_writer) (original_image:image) =
 
+  (* TODO
+     http://webreference.com/dev/gifanim/index-2.html *)
+
   if original_image.height > 0xffff || original_image.width > 0xffff then
     raise @@ Invalid_argument ("Image dimensions too large for GIF") ;
 
   let module ColorTable : Hashtbl.S with type key = int =
     Hashtbl.Make(struct
       type t = int
-      let equal (a:int) (b:int) = a = b
-      let hash a = a
+      let [@inline] equal (a:int) (b:int) = a = b
+      let [@inline] hash a = a
     end) in
 
   (* The purposed of this hashtable is to keep track of how many
