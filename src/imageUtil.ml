@@ -256,9 +256,18 @@ let int_to_str4 i : Bytes.t =
   s
 
 
-let _treat_alpha ~alpha ~background fg fg_off =
+let [@inline] rgba8888_to_rgb888 ~alpha ~background fg fg_off_bits =
+  (* [rgba8888_to_rgb888 alpha background fg fg_off_bits]
+     is [background] and [fg] blended according to the [alpha] ratio
+     where [0] is opaque [fg] and [255] is opaque [background].
+     [fg_off_bits] is the amount of bits to shift & mask to obtain
+     [background] to obtain the color channel corresponding to [fg].
+     for instance: [rgba8888_to_rgb888 ~alpha:(256/4)
+     ~background:0xff0000 0x00 16] is black on a red background with
+     1/4 transparency.*)
   let fg = fg land 0xff in
-  let bg = (background lsr fg_off) land 0xff in
+  let bg = (background lsr fg_off_bits) land 0xff in
+  (* output = alpha * foreground + (1-alpha) * background *)
   ((alpha * fg) lsr 8) + (((256-alpha) * (bg)) lsr 8)
 
 (* Colorize a block using IRC rgb888 escape codes *)
@@ -270,9 +279,9 @@ let colorize_rgba8888_irc ?(background=0xffff00) r g b alpha =
   assert (r <= 0xff && g <= 0xff && b <= 0xff) ; (* TODO normalize 16-bit*)
   let flags = 1 (* land 1 = 1 : background color
                    land 1 = 0 : foreground color *) in
-  let r,g,b = _treat_alpha ~alpha ~background r 16,
-              _treat_alpha ~alpha ~background g 8,
-              _treat_alpha ~alpha ~background b 0 in
+  let r,g,b = rgba8888_to_rgb888 ~alpha ~background r 16,
+              rgba8888_to_rgb888 ~alpha ~background g 8,
+              rgba8888_to_rgb888 ~alpha ~background b 0 in
   let bump flags i x =
     if x > 0x20
     then flags, Char.chr x
@@ -282,14 +291,15 @@ let colorize_rgba8888_irc ?(background=0xffff00) r g b alpha =
   let flags, b = bump flags 2 b in
   let flags = Char.chr (flags + 0x20) in
   Printf.sprintf "\x04#%c%c%c%c " r g b flags
+
 (* Colorize a block using VT100 rgb888 escape codes *)
 let colorize_rgba8888 ?(background=0xffff00) r g b alpha =
-  (* output = alpha * foreground + (1-alpha) * background *)
   Printf.sprintf "\x1b[38;2;%d;%d;%dm⬛\x1b[0m"
-    (_treat_alpha ~background ~alpha r 16)
-    (_treat_alpha ~background ~alpha g 8)
-    (_treat_alpha ~background ~alpha b 0)
-(* Same as above, takes the bytes from a string *)
+    (rgba8888_to_rgb888 ~background ~alpha r 16)
+    (rgba8888_to_rgb888 ~background ~alpha g 8)
+    (rgba8888_to_rgb888 ~background ~alpha b 0)
+
+(* Same as above, takes the bytes from a [RGBA] string *)
 let colorize_rgba8888_str ?background ?(offset=0) color =
   colorize_rgba8888 ?background
     (Char.code color.[0+offset])
