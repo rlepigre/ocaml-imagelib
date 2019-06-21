@@ -1,6 +1,7 @@
 type config = {
   input_file : string;
   text_color: [`IRC | `VT100 | `HTML];
+  background: int; (* RGB *)
   output_file : string option;
 }
 
@@ -10,6 +11,8 @@ let arg_parser array : config =
       erase leftover {config with text_color} tl in
     function
     | [] -> config, Array.of_list leftover
+    | "--background"::bg::tl ->
+      erase leftover {config with background = int_of_string bg} tl
     | "--irc"::tl -> set_text_color `IRC tl
     | "--html"::tl -> set_text_color `HTML tl
     | "--vt100"::tl -> set_text_color `VT100 tl
@@ -24,6 +27,7 @@ let arg_parser array : config =
   in
   match erase [] { text_color = `VT100 ;
                    input_file = "" ;
+                   background = 0;
                    output_file = None ;
                  } (Array.to_list array |> List.tl)
   with
@@ -60,10 +64,10 @@ let () =
     done
   in
   match config with
-  | { text_color = `VT100 ; _} -> (* print to terminal: *)
-    foreach_pixel ImageUtil.colorize_rgb888
-  | { text_color = `IRC ; _ } ->
-    foreach_pixel ImageUtil.colorize_rgb888_irc
+  | { text_color = `VT100 ; background ; _ } -> (* print to terminal: *)
+    foreach_pixel (ImageUtil.colorize_rgba8888 ~background)
+  | { text_color = `IRC ; background ; _ } ->
+    foreach_pixel (ImageUtil.colorize_rgba8888_irc ~background)
   | { output_file = Some fn ; _ } ->
     (* output to filename specified in second argument *)
     if Sys.(file_exists fn)

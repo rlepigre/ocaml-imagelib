@@ -255,8 +255,14 @@ let int_to_str4 i : Bytes.t =
   Bytes.set s 3 @@ char_of_int (i land mask);
   s
 
+
+let _treat_alpha ~alpha ~background fg fg_off =
+  let fg = fg land 0xff in
+  let bg = (background lsr fg_off) land 0xff in
+  ((alpha * fg) lsr 8) + (((256-alpha) * (bg)) lsr 8)
+
 (* Colorize a block using IRC rgb888 escape codes *)
-let colorize_rgb888_irc r g b _a =
+let colorize_rgba8888_irc ?(background=0xffff00) r g b alpha =
   (* 24-bit format from
      https://github.com/shabble/irssi-docs/wiki/Notes-256-Colour
      https://github.com/irssi/irssi/pull/48/files#diff-47cea7aba67a0854afea07a5577633dbR154
@@ -264,7 +270,11 @@ let colorize_rgb888_irc r g b _a =
   assert (r <= 0xff && g <= 0xff && b <= 0xff) ; (* TODO normalize 16-bit*)
   let flags = 1 (* land 1 = 1 : background color
                    land 1 = 0 : foreground color *) in
-  let bump flags i x = if x > 0x20
+  let r,g,b = _treat_alpha ~alpha ~background r 16,
+              _treat_alpha ~alpha ~background g 8,
+              _treat_alpha ~alpha ~background b 0 in
+  let bump flags i x =
+    if x > 0x20
     then flags, Char.chr x
     else flags lor (0x10 lsl i), Char.chr (0x20 + x) in
   let flags, r = bump flags 0 r in
@@ -273,14 +283,16 @@ let colorize_rgb888_irc r g b _a =
   let flags = Char.chr (flags + 0x20) in
   Printf.sprintf "\x04#%c%c%c%c " r g b flags
 (* Colorize a block using VT100 rgb888 escape codes *)
-let colorize_rgb888 r g b _alpha =
+let colorize_rgba8888 ?(background=0xffff00) r g b alpha =
+  (* output = alpha * foreground + (1-alpha) * background *)
   Printf.sprintf "\x1b[38;2;%d;%d;%dm⬛\x1b[0m"
-    (r land 0xff) (g land 0xff) (b land 0xff)
-(* Same as above, takes the bytesfrom a string *)
-let colorize_rgb888_str ?(offset=0) color =
-  colorize_rgb888
+    (_treat_alpha ~background ~alpha r 16)
+    (_treat_alpha ~background ~alpha g 8)
+    (_treat_alpha ~background ~alpha b 0)
+(* Same as above, takes the bytes from a string *)
+let colorize_rgba8888_str ?background ?(offset=0) color =
+  colorize_rgba8888 ?background
     (Char.code color.[0+offset])
     (Char.code color.[1+offset])
     (Char.code color.[2+offset])
-let colorize_rgb888_int color =
-  colorize_rgb888 (color lsl 16) (color lsr 8) color
+    (Char.code color.[3+offset])
