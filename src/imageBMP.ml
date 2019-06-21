@@ -175,8 +175,6 @@ end
 module BitmapMetaData = struct
   type compression_method =
     | RGB
-    | RLE_8bit (* http://www.fileformat.info/format/bmp/corion-rle8.htm *)
-    | RLE_4bit (* http://www.fileformat.info/format/bmp/corion-rle4.htm *)
     | Bitfields
 
   type bits_per_pixel =
@@ -251,10 +249,8 @@ module BitmapMetaData = struct
     let compression_method_of_int n =
       match n with
       | 0 -> Ok RGB
-      | 1 -> Ok RLE_8bit
-      | 2 -> Ok RLE_4bit
       | 3 -> Ok Bitfields
-      | u -> Error (`Bmp_error ("Invalid compression method" ^ Printf.sprintf "%#x" u))
+      | _ -> Error (`Bmp_error "Invalid compression method")
     in
 
     get_int4_le ich >>= fun size ->
@@ -535,8 +531,6 @@ module ReadBMP : ReadImage = struct
         meta.bitfields,
         meta.palette
       with
-      | _, (RLE_8bit | RLE_4bit), _, _ ->
-        Error (`Bmp_error "RLE (4/8 bit) compression not implemented")
         | BPP_1,  RGB, _, Some pl ->
             parse_pixels ~meta ~bpp:1 ~color_getter:(get_color_1 pl) ich
         | BPP_4,  RGB, _, Some pl ->
