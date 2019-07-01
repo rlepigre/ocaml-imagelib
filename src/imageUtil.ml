@@ -271,7 +271,8 @@ let [@inline] rgba8888_to_rgb888 ~alpha ~background fg fg_off_bits =
   ((alpha * fg) lsr 8) + (((256-alpha) * (bg)) lsr 8)
 
 (* Colorize a block using IRC rgb888 escape codes *)
-let colorize_rgba8888_irc ?(background=0xffff00) r g b alpha =
+let colorize_rgba8888_irc ?(background=0xffff00) ?(current=(-1,-1,-1))
+    r g b alpha =
   (* 24-bit format from
      https://github.com/shabble/irssi-docs/wiki/Notes-256-Colour
      https://github.com/irssi/irssi/pull/48/files#diff-47cea7aba67a0854afea07a5577633dbR154
@@ -282,26 +283,34 @@ let colorize_rgba8888_irc ?(background=0xffff00) r g b alpha =
   let r,g,b = rgba8888_to_rgb888 ~alpha ~background r 16,
               rgba8888_to_rgb888 ~alpha ~background g 8,
               rgba8888_to_rgb888 ~alpha ~background b 0 in
-  let bump flags i x =
-    if x > 0x20
-    then flags, Char.chr x
-    else flags lor (0x10 lsl i), Char.chr (0x20 + x) in
-  let flags, r = bump flags 0 r in
-  let flags, g = bump flags 1 g in
-  let flags, b = bump flags 2 b in
-  let flags = Char.chr (flags + 0x20) in
-  Printf.sprintf "\x04#%c%c%c%c " r g b flags
+  if (r,g,b) = current then " ", current else
+    let next = r,g,b in
+    let bump flags i x =
+      if x > 0x20
+      then flags, Char.chr x
+      else flags lor (0x10 lsl i), Char.chr (0x20 + x) in
+    let flags, r = bump flags 0 r in
+    let flags, g = bump flags 1 g in
+    let flags, b = bump flags 2 b in
+    let flags = Char.chr (flags + 0x20) in
+    Printf.sprintf "\x04#%c%c%c%c " r g b flags, next
 
-(* Colorize a block using VT100 rgb888 escape codes *)
-let colorize_rgba8888 ?(background=0xffff00) r g b alpha =
-  Printf.sprintf "\x1b[38;2;%d;%d;%dm⬛\x1b[0m"
-    (rgba8888_to_rgb888 ~background ~alpha r 16)
-    (rgba8888_to_rgb888 ~background ~alpha g 8)
-    (rgba8888_to_rgb888 ~background ~alpha b 0)
+let colorize_rgba8888 ?(background=0xffff00) ?(current=(-1,-1,-1)) r g b alpha =
+  let next = (rgba8888_to_rgb888 ~background ~alpha r 16),
+             (rgba8888_to_rgb888 ~background ~alpha g 8),
+             (rgba8888_to_rgb888 ~background ~alpha b 0) in
+  if next = current then "⬛", next else
+    let r,g,b = next in
+    Printf.sprintf "\x1b[38;2;%d;%d;%dm⬛" r g b, next
+
+(* Colorize a pixel using VT100 rgb888 escape codes *)
+let colorize_rgba8888_pixel ?(background=0xffff00) r g b alpha =
+  Printf.sprintf "%s\x1b[0m"
+    (fst (colorize_rgba8888 ~background r g b alpha))
 
 (* Same as above, takes the bytes from a [RGBA] string *)
 let colorize_rgba8888_str ?background ?(offset=0) color =
-  colorize_rgba8888 ?background
+  colorize_rgba8888_pixel ?background
     (Char.code color.[0+offset])
     (Char.code color.[1+offset])
     (Char.code color.[2+offset])
