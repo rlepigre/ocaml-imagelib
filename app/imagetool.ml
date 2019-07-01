@@ -61,16 +61,19 @@ let () =
   in
   let foreach_pixel f img =
     for y = 0 to img.Image.height -1 do
+      let current = ref (-1,-1,-1) in
       for x = 0 to img.width -1 do
         Image.read_rgba img x y (fun r g b a ->
-            print_string (f r g b a))
+            let out, next = f ?current:(Some !current) r g b a in
+            current := next;
+            print_string out)
       done; print_newline () ;
     done ;
   in
   let read_next =
     ImageLib.openfile_streaming ~extension:(extension config.input_file)
       (ImageUtil_unix.chunk_reader_of_path config.input_file) in
-  let foreach_img f =
+  let foreach_img f_pre f =
     let rec loop last_parsed_ts state =
       match read_next state with
       | None, _, _ -> ()
@@ -78,7 +81,7 @@ let () =
         let delay = float delay /. 100. in
         let parsed_ts = Unix.gettimeofday() in
         Unix.sleepf (max 0. (delay -. (parsed_ts -. last_parsed_ts)));
-        Printf.printf "\x1b[0;0H"; (* a bit annoying for debugging *)
+        f_pre ();
         foreach_pixel f img ;
         Printf.printf "%!";
         if state <> None then loop parsed_ts state
@@ -87,11 +90,14 @@ let () =
   match config with
   | { display_mode = Some `VT100 ; background ; _ } ->
     (* print to terminal: using 24-bit color escape codes  *)
-    foreach_img (ImageUtil.colorize_rgba8888 ~background)
+    foreach_img
+      (fun () -> Printf.printf "\x1b[0;0H") (* a bit annoying for debugging *)
+      (ImageUtil.colorize_rgba8888 ~background)
 
   | { display_mode = Some `IRC ; background ; _ } ->
     (* print to terminal, using IRC 24-bit color escape codes *)
-    foreach_img (ImageUtil.colorize_rgba8888_irc ~background)
+    foreach_img (fun () -> ())
+      (ImageUtil.colorize_rgba8888_irc ~background)
 
   | { output_file = Some fn ; _ } ->
     let img = match read_next None with
