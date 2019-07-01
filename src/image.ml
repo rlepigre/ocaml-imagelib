@@ -43,6 +43,20 @@ module Pixmap =
     let set : t -> int -> int -> int -> unit = function
       | Pix8  p -> Array2.set p
       | Pix16 p -> Array2.set p
+
+    let fill t color : unit = match t with
+      | Pix8 p -> Array2.fill p color
+      | Pix16 p -> Array2.fill p color
+
+    let copy = function
+      | Pix8 p ->
+        let w,h = Array2.dim1 p, Array2.dim2 p in
+        let fresh = Array2.create int8_unsigned c_layout w h in
+        Array2.blit p fresh ; Pix8 fresh
+      | Pix16 p ->
+        let w,h = Array2.dim1 p, Array2.dim2 p in
+        let fresh = Array2.create int16_unsigned c_layout w h in
+        Array2.blit p fresh ; Pix16 fresh
   end
 
 type pixmap =
@@ -63,6 +77,20 @@ module type ReadImage =
     val size       : chunk_reader -> int * int
     val parsefile  : chunk_reader -> image
   end
+
+module type ReadImageStreaming =
+  sig
+    include ReadImage
+    type read_state
+    val read_streaming : chunk_reader -> read_state option ->
+      image option * int * read_state option
+  end
+
+module type WriteImage =
+  sig
+    val write : chunk_writer -> image -> unit
+  end
+
 
 exception Corrupted_image of string
 exception Not_yet_implemented of string
@@ -216,6 +244,7 @@ let write_rgb i x y r g b =
   | GreyA(gg,_)      ->
       begin
         let g = (r + g + b) / 3 in
+        (* TODO see ImageUtil on blending *)
         Pixmap.set gg x y g
       end
 
@@ -258,3 +287,30 @@ let write_grey i x y g =
       begin
         Pixmap.set gg x y g
       end
+
+let fill_rgb ?alpha i r g b : unit =
+  let fill_rgb ~rr ~gg ~bb =
+    Pixmap.fill rr r ;
+    Pixmap.fill gg g ;
+    Pixmap.fill bb b in
+  match i.pixels, alpha with
+  | RGBA (rr, gg, bb, aa) , _ ->
+    fill_rgb ~rr ~gg ~bb ;
+    (match alpha with | None -> ()
+                      | Some a -> Pixmap.fill aa a)
+  | RGB (rr, gg, bb), None -> fill_rgb ~rr ~gg ~bb
+  | RGB _, Some _ -> raise (Corrupted_image "fill_rgb with alpha")
+  | Grey _, _ -> raise (Not_yet_implemented "fill_rgb for greyscale")
+  | GreyA _, _ -> raise (Not_yet_implemented "fill_rgb for greyscale")
+
+let fill_alpha i c = match i.pixels with
+  | Grey _ | RGB _ -> ()
+  | RGBA (_, _, _, aa)
+  | GreyA (_, aa) -> Pixmap.fill aa c
+
+let copy i = let open Pixmap in
+  {i with pixels = match i.pixels with
+       | Grey ii -> Grey (copy ii)
+       | GreyA (ii,aa) -> GreyA (copy ii, copy aa)
+       | RGB (rr,gg,bb)-> RGB (copy rr, copy gg, copy bb)
+       | RGBA (rr,gg,bb,aa) -> RGBA (copy rr, copy gg, copy bb, copy aa) }

@@ -23,7 +23,6 @@ open ImagePNG
 open ImagePPM
 open ImageXCF
 open ImageJPG
-open ImageGIF
 open ImageBMP
 
 module PNG = ImagePNG
@@ -43,8 +42,8 @@ let size ~extension ich =
   then ReadXCF.size ich else
   if List.mem ext ReadJPG.extensions
   then ReadJPG.size ich else
-  if List.mem ext ReadGIF.extensions
-  then ReadGIF.size ich else
+  if List.mem ext GIF.extensions
+  then GIF.size ich else
   if List.mem ext ReadBMP.extensions
   then ReadBMP.size ich else
     raise (Not_yet_implemented ext)
@@ -53,19 +52,38 @@ let openfile ~extension ich : image =
   let ext = String.lowercase_ascii extension in
   if List.mem ext ReadPNG.extensions
   then ReadPNG.parsefile ich else
-  if List.mem ext ReadGIF.extensions
-  then ReadGIF.parsefile ich else
+  if List.mem ext GIF.extensions
+  then GIF.parsefile ich else
   if List.mem ext ReadPPM.extensions
   then ReadPPM.parsefile ich else
   if List.mem ext ReadBMP.extensions
   then ReadBMP.parsefile ich else
     raise (Not_yet_implemented ext)
 
+let openfile_streaming ~extension ich state =
+  let if_some f = function
+    | _, _, None as x  -> x
+    | image, time, Some v -> image, time, Some (f v) in
+  match state with
+  | Some (`GIF t) ->
+    if_some (fun v -> `GIF v) (GIF.read_streaming ich (Some t))
+  | None ->
+    let ext = String.lowercase_ascii extension in
+    if List.mem ext ReadPNG.extensions
+    then Some (ReadPNG.parsefile ich), 0, None else
+    if List.mem ext GIF.extensions
+    then if_some (fun v -> `GIF v) (GIF.read_streaming ich None) else
+    if List.mem ext ReadPPM.extensions
+    then Some (ReadPPM.parsefile ich), 0, None else
+    if List.mem ext ReadBMP.extensions
+    then Some (ReadBMP.parsefile ich), 0, None else
+      raise (Not_yet_implemented ext)
+
 let writefile ~extension (och:ImageUtil.chunk_writer) i =
   let extension = String.lowercase_ascii extension in
   if List.mem extension ImagePNG.ReadPNG.extensions
   then ImagePNG.write_png och i else
-  if List.mem extension ImageGIF.ReadGIF.extensions
+  if List.mem extension GIF.extensions
   then ImageGIF.write och i else
   if List.mem extension ImagePPM.ReadPPM.extensions
   then ImagePPM.write_ppm och i Binary else
