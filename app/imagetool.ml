@@ -68,7 +68,7 @@ let () =
             current := next;
             print_string out)
       done; print_newline () ;
-    done ;
+    done
   in
   let read_next =
     ImageLib.openfile_streaming ~extension:(extension config.input_file)
@@ -92,7 +92,8 @@ let () =
     (* print to terminal: using 24-bit color escape codes  *)
     foreach_img
       (fun () -> Printf.printf "\x1b[0;0H") (* a bit annoying for debugging *)
-      (ImageUtil.colorize_rgba8888 ~background)
+      (ImageUtil.colorize_rgba8888 ~background) ;
+    print_string "\x1b[0m"
 
   | { display_mode = Some `IRC ; background ; _ } ->
     (* print to terminal, using IRC 24-bit color escape codes *)
