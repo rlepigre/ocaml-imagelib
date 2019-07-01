@@ -113,7 +113,10 @@ let bin_of_str ~clear_code (t:decoder_state) str =
     `Partial (state, symbols)
 
 
-module ReadGIF : ReadImage = struct
+module ReadGIF : sig
+  include ReadImage
+  include ReadImageStreaming
+end = struct
   let extensions = ["gif"]
 
   let [@inline always] uint16le ?(off=0) buf =
@@ -248,11 +251,6 @@ module ReadGIF : ReadImage = struct
       end
   end
 
-  type ancillary_state =
-    (* stuff parsed from various extensions etc *)
-    { transparency_index : int;
-    }
-
   type image_descriptor_state = {
     must_clear : bool; (* decoder MUST start with a CLEAR code *)
     dict : Dict.instance ; (* decompression dictionary *)
@@ -264,7 +262,18 @@ module ReadGIF : ReadImage = struct
     lzw_code_size : int ; (* current *)
     decoder : decoder_state ;
   }
-  let process_image_descriptor_subblock ancillary
+
+  type read_state =
+    { header : gif_header_data ;
+      gct : string option ; (* global color table *)
+      compression_dict : Dict.instance option ;
+      buffer : image ; (* needs to be copied if image is returned *)
+      (* ancillary state parsed from various extensions etc: *)
+      transparency_index : int;
+      display_time : int; (* hundreds of a second; 0 means "forever" *)
+    }
+
+  let process_image_descriptor_subblock ~transparency_index
       ~color_table ~color_table_size
       ~image ~lzw_min_size original_state subblock =
     let clear_code = calc_clear_code lzw_min_size in
@@ -306,7 +315,7 @@ module ReadGIF : ReadImage = struct
         (Char.code color_table.[offset  ])
         (Char.code color_table.[offset +1])
         (Char.code color_table.[offset +2])
-        (if symbol = ancillary.transparency_index then 0 else 0xff)
+        (if symbol = transparency_index then 0 else 0xff)
     in
     let [@inline always] process_symbols process_state symbols =
       let [@inline always] rec loop state = function
@@ -391,8 +400,8 @@ module ReadGIF : ReadImage = struct
         | state -> `Partial state
       end
 
-  let process_image_descriptor_block (ancillary:ancillary_state)
-      ?compression_dict:original_compression_dict ich hdr gct  =
+  let process_image_descriptor_block (state:read_state) ich =
+    let original_compression_dict = state.compression_dict in
     let block  = get_bytes ich (4+4+1+1) in (* four 16-bit coordinates *)
     let left   = uint16le ~off:0 block in
     let top    = uint16le ~off:2 block in     (* 4 : coordinates *)
@@ -407,14 +416,15 @@ module ReadGIF : ReadImage = struct
     (*Printf.printf "TODO lzw_min_size %d\n%!" lzw_min_size;*)
 
 
-    if let global_width, global_height = hdr.image_size in
+    if let global_width, global_height = state.header.image_size in
       width = 0 || height = 0
       || (left + width > global_width)
       || (top + height > global_height) then
       raise (Corrupted_image "Invalid image descriptor block dimensions");
 
     if lzw_min_size < 3 || lzw_min_size > 12 then
-      raise (Corrupted_image "Invalid LZW minimum code size") ;
+      raise (Corrupted_image (Printf.sprintf "Invalid LZW minimum code size %d"
+                                lzw_min_size)) ;
 
     (* feature flags:
        has_local_color_table  = flags & 0x80
@@ -434,14 +444,17 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
       raise (Not_yet_implemented
                "Unsupported ImageDescriptor feature flag(s)") ;
 
-    if not hdr.global_color_table && (0 = flags land 0x80) then
+    if not state.header.global_color_table && (0 = flags land 0x80) then
       raise (Corrupted_image "No color table available for GIF fragment") ;
 
     let color_table, color_table_size =
       if 0 <> flags land 0x80
       then get_bytes ich (3 * local_color_table_size),
            local_color_table_size
-      else gct, 2 lsl hdr.size_glob_col_tbl
+      else match state.gct with
+        | None -> raise (Corrupted_image
+                           "GIF: No global color table, and no local either")
+        | Some gct -> gct, 2 lsl state.header.size_glob_col_tbl
     in
 
     let image = create_rgb ~alpha:true ~max_val:255 width height in
@@ -457,10 +470,10 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
       | ch, `Complete _dict ->
         raise (Corrupted_image
                  (Printf.sprintf "complete but not really %#x" ch))
-      | encoded_size, (`Initial | `Partial _ as state) ->
-        let state =
-          match state with
-          | `Partial state -> state
+      | encoded_size, (`Initial | `Partial _ as descriptor_state) ->
+        let descriptor_state =
+          match descriptor_state with
+          | `Partial d_state -> d_state
           | `Initial ->
             let clear_code = calc_clear_code lzw_min_size in
             { previous_symbol = clear_code ;
@@ -482,43 +495,70 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
               }
             } in
         let subblock = get_bytes ich encoded_size in
-        let state =
-          process_image_descriptor_subblock ancillary
+        let descriptor_state =
+          process_image_descriptor_subblock
+            ~transparency_index:state.transparency_index
             ~color_table ~color_table_size ~image ~lzw_min_size
-            state subblock in
-        process_subblock state
+            descriptor_state subblock in
+        process_subblock descriptor_state
     in
     let dict = process_subblock `Initial in
-    dict, image
+    dict, (image, left, top)
 
+  let fill_background_color image color_table bg_color_index =
+    let c color_channel = int_of_char
+        (color_table.[bg_color_index + color_channel]) in
+    Image.fill_rgb image (c 0) (c 1) (c 2)
 
-  let parsefile ich : image =
-    let hdr = read_header ich in
-    let gct = ref "" in
-    let gct_size =
-      (*Size of Global Color Table - If the Global Color Table Flag is
-         set to 1, the value in this field is used to calculate the number
-         of bytes contained in the Global Color Table. To determine that
-         actual size of the color table, raise 2 to [the value of the field
-         + 1].*)
-      1 lsl (succ hdr.size_glob_col_tbl) in
-    let gct_bytesize = gct_size * 3 in
-    let () = match hdr.global_color_table with
-      | false -> ()
-      | true ->
-        (*Global Color Table Flag - Flag indicating the presence of a
-            Global Color Table; if the flag is set, the Global Color Table will
-            immediately follow the Logical Screen Descriptor.*)
-        gct := get_bytes ich gct_bytesize ;
-    in
+  let read_streaming ich (gif_state:read_state option)
+    : image option * int * read_state option =
+    let gif_state : read_state =
+      begin match gif_state with
+        | None ->
+          let header = read_header ich in
+          let buffer =
+            let w,h = header.image_size in
+            create_rgb ~alpha:true ~max_val:255 w h in
+          let gct_size =
+            (*Size of Global Color Table - If the Global Color Table Flag is
+               set to 1, the value in this field is used to calculate the number
+               of bytes contained in the Global Color Table. To determine that
+               actual size of the color table, raise 2 to
+              [the value of the field + 1].*)
+            1 lsl (succ header.size_glob_col_tbl) in
+          let gct_bytesize = gct_size * 3 in
+          let gct =
+            match header.global_color_table with
+            | false -> None
+            | true ->
+              (*Global Color Table Flag - Flag indicating the presence of a
+                  Global Color Table; if the flag is set, the
+                Global Color Table will immediately follow the
+                Logical Screen Descriptor.*)
+              let gct = get_bytes ich gct_bytesize in
+
+              (* initialize with bgcolor if there's a global color table: *)
+              fill_background_color buffer gct header.bg_color_index ;
+              fill_alpha buffer 0xff;
+
+              Some gct
+          in
+          { header; gct; compression_dict = None ;
+            (* initialize ancillary state: *)
+            transparency_index = -1 ;
+            display_time = 0;
+            buffer ;
+          }
+        | Some state -> state
+      end in
     Printexc.record_backtrace true; (* TODO *)
-    let [@inline always] rec parse_blocks ((ancillary:ancillary_state), (compression_dict:Dict.instance option), acc): image list =
+    let [@inline always] rec parse_blocks gif_state
+      : image option * int * read_state option =
       match (get_bytes ich 1).[0] with
-      | '\x3b' -> List.rev acc (* End of file *)
+      | '\x3b' -> None, gif_state.display_time, None (* End of file *)
 
       | '\x21' -> (* Extension Introducer *)
         let extension_label = chunk_byte ich in
-        Printf.printf "Extension %#x\n%!" extension_label;
         begin match extension_label with
           | 0xf9 -> (* Graphic Control Extension *)
             let len = chunk_byte ich in
@@ -528,17 +568,19 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
             if body.[len] <> '\x00' then
               raise (Corrupted_image "GCE: missing end of block") ;
             let packed = int_of_char body.[0] in
-            (* TODO
-               delaytime <- body.(1..2)
-               (* ^-- 100ths of seconds before displaying next *)
-               transparent color index <- body.(3)
-               (* ^-- presumably index into global color table. should presumably be zero if use_transparent_color is 0 *)
-            *)
+            let display_time =
+              (* delaytime <- body.(1..2)
+                 100ths of seconds before displaying next frame *)
+              uint16le ~off:1 body in
             let use_transparent_color = (packed land 1) = 1 in
-            let ancillary =
+            let transparency_index =
+              (* transparent color index <- body.(3)
+                 index into global color table.
+                 TODO should this default to 0? *)
               match use_transparent_color with
-              | true -> { transparency_index = int_of_char body.[3] }
-              | false -> { transparency_index = -1 }
+              | true -> int_of_char body.[3]
+              (* TODO maybe verify that the index fits the GCT? *)
+              | false -> -1
             in
             let user_input_flag = (packed lsr 1) land 1 in
             (* The Reserved subfield is not used in GIF89a and
@@ -547,16 +589,33 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
             (* TODO maybe assert that GDM must be 0 if there's no transparency at play? *)
             (* http://webreference.com/content/studio/disposal.html *)
             let graphics_disposal_method = match (packed lsr 2) land 0b111 with
-              | 0 -> Printf.printf "graphic disposal method not specified\n%!"
+              | 0 ->
+                Printf.printf "graphic disposal method not specified\n%!"
               (* Use this option to replace one full-size, non-transparent frame with another. *)
+              (* TODO *)
 
-              | 1 -> Printf.printf "do not dispose of graphic\n%!"
+              | 1 -> (* do not dispose of graphic*)
+                (*Printf.printf "DO NOT DISPOSE\n%!";*)
+                fill_alpha gif_state.buffer 0xff;
               (*  In this option, any pixels not covered up by the next frame continue to display. This is the setting used most often for optimized animations. In the flashing light animation, we wanted to keep the first frame displaying, so the subsequent optimized frames would just replace the part that we wanted to change. That's what Do Not Dispose does. *)
+                ()
 
               | 2 -> Printf.printf "overwrite graphic with background color\n%!"
               (* The background color or background tile - rather than a previous frame - shows through transparent pixels. In the GIF specification, you can set a background color. In Netscape, it's the page's background color or background GIF that shows through. *)
+                ;
+                (match gif_state.gct with
+                 | None -> (* TODO default to black or fail? *)
+                   fill_background_color gif_state.buffer
+                     "\000\000\000" 0
+                 | Some gct ->
+                   fill_background_color gif_state.buffer
+                     gct gif_state.header.bg_color_index) ;
+                (*Image.fill_alpha gif_state.buffer 0xFF*)
 
-              | 4 -> Printf.printf "overwrite graphic with previous graphic\n%!"
+              | 4 -> (* overwrite graphic with previous graphic*)
+                ignore @@ failwith "yy";
+                Image.fill_alpha gif_state.buffer 0xFF
+              (* TODO unclear if this means that alpha should show *)
               (* The background color or background tile - rather than a previous frame - shows through transparent pixels. In the GIF specification, you can set a background color. In Netscape, it's the page's background color or background GIF that shows through.
 The thing to remember about Restore to Previous is that it's not necessarily the first frame of the animation that will be restored but the last frame set to Unspecified or Do Not Dispose*)
 
@@ -564,7 +623,9 @@ The thing to remember about Restore to Previous is that it's not necessarily the
                   ("GIF: Graphics Disposal Method multiple bits set")
             in
             let _TODO = user_input_flag, graphics_disposal_method in
-            parse_blocks (ancillary, compression_dict, acc) (* <-- next block *)
+            let gif_state = {gif_state with transparency_index ;
+                                            display_time} in
+            parse_blocks gif_state (* <-- next block *)
 
           (* | 0xfe -> (* comment *) *)
 
@@ -584,9 +645,9 @@ The thing to remember about Restore to Previous is that it's not necessarily the
                   raise @@ Corrupted_image
                     (Printf.sprintf
                        "GIF NETSCAPE 2.0 block unknown sub-block ID") ;
-                let loop_count = uint16le ~off:1 subblock in
+                let _loop_count = uint16le ~off:1 subblock in
                 (* TODO 0x00 (0) means infinite loop. *)
-                Printf.printf "TODO NETSCAPE EXTENSION loop count:%d\n%!" loop_count ;
+                (*Printf.printf "TODO NETSCAPE EXTENSION loop count:%d\n%!" loop_count ;*)
                 let terminator = chunk_byte ich in
                 if terminator <> 0 then
                   raise @@ Corrupted_image
@@ -604,37 +665,44 @@ The thing to remember about Restore to Previous is that it's not necessarily the
                      "Unknown GIF ApplicationExtension %S:%S [len %d]"
                      identifier authentcode subblock_len)
             end ;
-            parse_blocks (ancillary, compression_dict, acc)
+            parse_blocks gif_state
           | unknown -> raise @@ Not_yet_implemented
               (Printf.sprintf "Unknown GIF Extension %#x" unknown)
         end
 
       | '\x2c' -> (* Image Descriptor*)
-        let dict, image = process_image_descriptor_block ancillary ?compression_dict ich hdr !gct  in
-        parse_blocks (ancillary, Some dict, (image::acc))
+        let dict, (image,left,top) = process_image_descriptor_block gif_state ich in
+        (* TODO here we need to read a bit more and determine if we need to copy the buffer or if the next byte is the end marker *)
+        let gif_state = {gif_state with
+                         compression_dict = Some dict ;
+                         buffer = Image.copy gif_state.buffer} in
+        let buffer = gif_state.buffer in
+        assert (image.height <= buffer.height) ;
+        assert (image.width <= buffer.width) ;
+        assert (left <= buffer.width) ;
+        assert (top <= buffer.height) ;
+        for x = 0 to image.width -1 do
+          if x+left < 0 || x+left >= buffer.width then () else
+          for y = 0 to image.height -1 do
+            if y+top < 0 || y+top >= buffer.height then () else
+            Image.read_rgba image x y
+              (fun r g b -> function
+                 | 0x00 -> begin match gif_state.buffer.pixels with
+                     | RGBA (_,_,_,aa) -> Pixmap.set aa (left+x) (top+y) 0xff
+                     | _ -> failwith "gif_state.buffer.pixels is not rgba"
+                   end
+                 | _ ->
+                   Image.write_rgb gif_state.buffer (left+x) (top+y) r g b)
+          done
+        done ;
+        Some gif_state.buffer, gif_state.display_time, Some gif_state
 
       | c -> raise (Not_yet_implemented
                       (Printf.sprintf "unknown block type %C" c))
     in
-    let image : image =
-      let w,h = hdr.image_size in
-      let _image =
-        (* TODO initialize with bgcolor if there's a global color table *)
-        create_rgb w h in
-      (* TODO blit partial images into main image and return that instead *)
-      let tODO_partial_images = parse_blocks ({transparency_index = -1},
-                                                None, []) in
-      match tODO_partial_images with
-      | [] ->
-        raise (Corrupted_image "GIF did not contain an image descriptor block")
-      | [image] ->
-        image
-      | _ ->
-        raise (Not_yet_implemented
-                 "multiple image descriptor blocks in GIF file")
-    in
-    ImageUtil.close_chunk_reader ich ;
-    image
+    parse_blocks gif_state
+
+  let parsefile cr = ImageUtil.parsefile_of_read_streaming ~read_streaming cr
 end
 
 
@@ -910,3 +978,5 @@ let write (cw:chunk_writer) (original_image:image) =
 
   (* END OF GIF: *)
   chunk_write_char cw '\x3b'
+
+include ReadGIF

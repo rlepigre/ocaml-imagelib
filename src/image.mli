@@ -32,6 +32,13 @@ module Pixmap :
 
     val get : t -> int -> int -> int
     val set : t -> int -> int -> int -> unit
+
+    val fill : t -> int -> unit
+
+    val copy : t -> t
+    (** [copy t] is a copy of [t] using a new memory allocation.
+        This is useful when code out of your control may hold references to a
+        pixmap, since pixmaps are mutable.*)
   end
 
 type pixmap =
@@ -68,6 +75,15 @@ val write_rgb  : image -> int -> int -> int -> int -> int -> unit
 val write_greya: image -> int -> int -> int -> int -> unit
 val write_grey : image -> int -> int -> int -> unit
 
+val fill_rgb : ?alpha:int -> image -> int -> int -> int -> unit
+(** [fill_rgb ?alpha image r g b] overwrites [image] with [r],[g],[b] colors. TODO *)
+
+val fill_alpha : image -> int -> unit
+
+val copy : image -> image
+(** [copy image] is a copy of [image] backed my a new memory allocation,
+    so that the mutations of either copy are independent of each other*)
+
 exception Corrupted_image of string
 
 module type ReadImage =
@@ -76,6 +92,36 @@ module type ReadImage =
     val extensions : string list
     val size       : chunk_reader -> int * int
     val parsefile  : chunk_reader -> image
+  end
+
+module type ReadImageStreaming =
+  sig
+    include ReadImage
+    type read_state
+
+    val read_streaming : ImageUtil.chunk_reader ->
+      read_state option -> image option * int * read_state option
+      (** [read_streaming io state] is an image frame,
+          its suggested display time (in hundredths of a second;
+          for animations), and
+          optionally the state required to read the next frame.
+
+          The first invocation should pass [state = None] to initialize a new
+          reading context.
+
+          If the resulting [read_state option] is [None],
+          there are no more image frames available in [io].
+          If it is [Some st], [st] must be passed to the next invocation of
+          [read_streaming].
+
+          @raises TODO when [io] ends prematurely.
+      *)
+  end
+
+module type WriteImage =
+  sig
+    open ImageUtil
+    val write : chunk_writer -> image -> unit
   end
 
 exception Not_yet_implemented of string

@@ -35,6 +35,10 @@ val size : extension:string -> ImageUtil.chunk_reader -> int * int
 *)
 val openfile : extension:string -> ImageUtil.chunk_reader -> Image.image
 
+val openfile_streaming : extension:string -> ImageUtil.chunk_reader ->
+  [`GIF of ImageGIF.read_state] option ->
+  image option * int * [`GIF of ImageGIF.read_state] option
+(** see {!ReadImageStreaming.read_streaming} *)
 
 val writefile : extension:string ->
   ImageUtil.chunk_writer -> Image.image -> unit
@@ -64,7 +68,8 @@ module JPG :
 
 module GIF :
   sig
-    module ReadGIF : ReadImage
+    include ReadImage
+    include WriteImage
 
     val write : chunk_writer -> image -> unit
     (** [write cw image] encodes [image] as a GIF and writes it to [cw].

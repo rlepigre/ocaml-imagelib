@@ -306,3 +306,12 @@ let colorize_rgba8888_str ?background ?(offset=0) color =
     (Char.code color.[1+offset])
     (Char.code color.[2+offset])
     (Char.code color.[3+offset])
+
+let parsefile_of_read_streaming ~read_streaming =
+  fun chunk_reader ->
+  match read_streaming chunk_reader None with
+  | exception e -> close_chunk_reader chunk_reader ; raise e
+  | None, _, _ -> raise (Invalid_argument "no image in file") (*TODO*)
+  | Some image, _, None -> close_chunk_reader chunk_reader ; image
+  | Some image, _, _ ->
+    image (* TODO warn that there are more frames available *)
