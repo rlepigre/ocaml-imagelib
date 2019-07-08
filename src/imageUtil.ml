@@ -301,7 +301,7 @@ let colorize_rgba8888 ?(background=0xffff00) ?(current=(-1,-1,-1)) r g b alpha =
              (rgba8888_to_rgb888 ~background ~alpha b 0) in
   if next = current then "⬛", next else
     let r,g,b = next in
-    Printf.sprintf "\x1b[0mgit\x1b[48;2;%d;%d;%dm\x1b[38;2;%d;%d;%dm⬛" r g b r g b, next
+    Printf.sprintf "\x1b[0m\x1b[48;2;%d;%d;%dm\x1b[38;2;%d;%d;%dm⬛" r g b r g b, next
 
 (* Colorize a pixel using VT100 rgb888 escape codes *)
 let colorize_rgba8888_pixel ?(background=0xffff00) r g b alpha =
