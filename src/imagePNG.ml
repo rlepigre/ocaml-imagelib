@@ -54,7 +54,7 @@ module PNG_Zlib = struct
     let len = String.length input_ro in
     let inputpos = ref 0 in
     let input_temp, output_temp = Bytes.(create 0xFFFF, create 0xFFFF) in
-    let final_output = Buffer.create (len / 3) in (* approx avg rate *)
+    let final_output = Stdlib.Buffer.create (len / 3) in (* approx avg rate *)
 
     let refill (strbuf:Bytes.t) : int =
       let remaining = len - !inputpos in
@@ -65,26 +65,26 @@ module PNG_Zlib = struct
     in
 
     let flush strbuf len =
-      Buffer.add_subbytes final_output strbuf 0 len ;
+      Stdlib.Buffer.add_subbytes final_output strbuf 0 len ;
       0xFFFF
     in
 
-    let window = Window.create ~witness:B.Bytes in
+    let window = Window.create ~crc:Window.adler32 ~witness:Buffer.Bytes in
 
     begin match
         Zlib_inflate.bytes input_temp output_temp
-          refill flush Zlib_inflate.(default ~witness:B.bytes window) with
+          refill flush Zlib_inflate.(default ~witness:Buffer.bytes window) with
     | Error _ ->
       let msg = Printf.sprintf "Decompress.Inflate.bytes failed ..." in
       raise (PNG_Zlib_error msg);
-    | Ok _ -> Buffer.contents final_output
+    | Ok _ -> Stdlib.Buffer.contents final_output
     end
 
   let compress_string (inputstr:string) : string =
     let len = String.length inputstr in
     let inputpos = ref 0 in
     let input_temp, output_temp = Bytes.(create 0xFFFF , create 0xFFFF) in
-    let final_output = Buffer.create (len * 3) in (* approx avg rate *)
+    let final_output = Stdlib.Buffer.create (len * 3) in (* approx avg rate *)
 
     let refill strbuf _max : int =
       let max = match _max with None -> 0xFFFF | Some m -> m in
@@ -96,20 +96,20 @@ module PNG_Zlib = struct
     in
 
     let flush strbuf f_len =
-      Buffer.add_subbytes final_output strbuf 0 f_len ; 0xFFFF
+      Stdlib.Buffer.add_subbytes final_output strbuf 0 f_len ; 0xFFFF
     in
 
     (* Computations<->size trade-off (see Decompress.Deflate.default): *)
     let compression_level = 4 in
 
-    let window = Zlib_deflate.default ~witness:B.Bytes compression_level in
+    let window = Zlib_deflate.default ~witness:Buffer.Bytes compression_level in
 
     begin match Zlib_deflate.bytes input_temp output_temp
                   refill flush window with
     | Error _ ->
       let msg = Printf.sprintf "Decompress.Deflate.bytes failed ..." in
       raise (PNG_Zlib_error msg)
-    | Ok _ -> Buffer.contents final_output
+    | Ok _ -> Stdlib.Buffer.contents final_output
     end
 
 end
