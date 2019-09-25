@@ -14,8 +14,12 @@ let crowbar_png_parsefile () =
 
 let () =
   let cr = ImageUtil_unix.chunk_reader_of_path Sys.argv.(1) in
-  ignore @@ ImageLib.PNG.ReadPNG.parsefile cr;
-  ()
+  match ImageLib.PNG.ReadPNG.parsefile cr with
+  | _ -> ()
+  | exception End_of_file -> ()
+  | exception Image.Corrupted_image("Invalid PNG header...") -> ()
+  | exception Image.Corrupted_image("Size of chunk greater than OCaml can handle...") -> ()
+  | exception Image.Corrupted_image("Reached end of file while looking for end of chunk") -> ()
 
 
 
