@@ -64,9 +64,12 @@ module ReadPPM : ReadImage = struct
         raise(Image.Corrupted_image "PPM: invalid height")
       end;
       pass_comments ();
-      Scanf.bscanf scanner "%u%1[\t\n ]" (fun mv _ -> max_val := mv)
-    end ;
-
+      begin try
+        Scanf.bscanf scanner "%u%1[\t\n ]" (fun mv _ -> max_val := mv);
+      with Stdlib.Scanf.Scan_failure _ ->
+        raise(Image.Corrupted_image "PPM: invalid max_val")
+      end
+    end;
     !magic,!width,!height,!max_val,scanner
 
   (*
