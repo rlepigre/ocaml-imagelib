@@ -1,2 +1,5 @@
 *.merlin
 *~
+_build
+imagelib-unix.install
+imagelib.install
