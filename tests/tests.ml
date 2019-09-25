@@ -1,18 +1,22 @@
 (* redundant: imagelib.GIF.write *)
-module Imagelib_tests = struct
+module ImageLib_tests = struct
 
-  let crowbar_gen_reader
+  (* let crowbar_gen_reader
   : ImageUtil.chunk_reader Crowbar.gen =
     let content = Crowbar.bytes in
     Crowbar.map [content] (fun x ->
       fun _bytesorclose -> Ok x
     )
     (* Crowbar.const @@ fun _bytesorclose ->
-      Error(`End_of_file 8) *)
+      Error(`End_of_file 8) *) *)
+
+  let crowbar_gen_cr =
+    let content = Crowbar.bytes in
+    Crowbar.map [content] ImageUtil.chunk_reader_of_string
 
   let crowbar_png_size () =
     Crowbar.add_test ~name:"ImageLib.PNG.ReadPNG.size"
-      [crowbar_gen_reader]
+      [crowbar_gen_cr]
       (fun cr ->
         try Crowbar.check
         (ImageLib.PNG.ReadPNG.size cr <> (0, 0))
@@ -27,15 +31,25 @@ module Imagelib_tests = struct
 end
 
 module ImageLib_PNG_tests = struct
-  let reg01 _ =
-    ()
-  let regressions : unit Alcotest.test_case list =
-    [ ("01: \"\\149\\218\\249 Invalid_argument(\"String.sub / Bytes.sub\")", `Quick, reg01)]
+  let cr_as = ImageUtil.chunk_reader_of_string
+
+  let chunk_reader_of_string_raises _ =
+    Alcotest.(check_raises) "when reading outside bounds, End_of_file is raised"
+    End_of_file
+    (fun () -> ignore @@ ImageLib.PNG.ReadPNG.size(cr_as "\149\218\249"))
+
+  let regressions : unit Alcotest.test_case list = []
+
+  let unit_tests : unit Alcotest.test_case list =
+    [("chunk_reader_of_string raises on EOF", `Quick, chunk_reader_of_string_raises)]
 end
 
 let tests : unit Alcotest.test list =
-  [ ("fuzzing", Imagelib_tests.fuzzing);
-    ("regressions", ImageLib_PNG_tests.regressions)
+  [ 
+    ("unit tests", ImageLib_PNG_tests.unit_tests);
+    ("fuzzing", ImageLib_tests.fuzzing);
+    ("regressions", ImageLib_PNG_tests.regressions);
+    
    ]
 
 let () =
