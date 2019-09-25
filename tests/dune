@@ -1,7 +1,8 @@
 (executables
-  (names tests)
-  (public_names -)
-  (libraries imagelib crowbar alcotest)
+  (names tests aflrunner)
+  (public_names yo lo)
+  (package imagelib-unix)
+  (libraries imagelib imagelib-unix crowbar alcotest)
 )
 (alias
   (name runtest)
