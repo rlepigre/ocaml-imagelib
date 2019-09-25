@@ -12,7 +12,7 @@ let crowbar_skip_known_errors f =
 let crowbar_png_parsefile () =
   (crowbar_skip_known_errors(fun cr -> (ignore @@ ImageLib.PNG.ReadPNG.parsefile cr; true)))
 
-let () =
+let perform () =
   let cr = ImageUtil_unix.chunk_reader_of_path Sys.argv.(1) in
   match ImageLib.PNG.ReadPNG.parsefile cr with
   | _ -> ()
@@ -22,4 +22,4 @@ let () =
   | exception Image.Corrupted_image("Reached end of file while looking for end of chunk") -> ()
 
 
-
+let () = AflPersistent.run perform
