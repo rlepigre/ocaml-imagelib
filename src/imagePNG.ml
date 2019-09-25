@@ -775,21 +775,6 @@ module ReadPNG : ReadImage = struct
               if !debug then begin
                 Printf.fprintf stderr "pCAL chunk ignored\n%!"
               end
-          | "gIFg" ->
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "gIFg chunk ignored\n%!"
-               end
-          | "gIFx" ->
-               (* TODO *)
-               if !debug then begin
-                 Printf.fprintf stderr "gIFx chunk ignored\n%!"
-               end
-          | "gIFt" ->
-               (* Deprecated since 1998 *)
-               if !debug then begin
-                 Printf.fprintf stderr "gIFt chunk ignored (deprecated)\n%!"
-               end
           | "sTER" ->
                only_before curr_ctype "IDAT";
                only_once curr_ctype;
@@ -797,10 +782,11 @@ module ReadPNG : ReadImage = struct
                if !debug then begin
                  Printf.fprintf stderr "sTER chunk ignored\n%!"
                end
-          | "fRAC" ->
-               (* TODO *)
+          | s when String.length(s) > 1 && Char.code(s.[0]) land 0x20 = 0x20 ->
+               (* Starts with lowercase aka a private chunk,
+                  which can be ignored. *)
                if !debug then begin
-                 Printf.fprintf stderr "fRAC chunk ignored\n%!"
+                 Printf.fprintf stderr "%s chunk ignored\n%!" s
                end
           | s      ->
                let msg = Printf.sprintf "Unknown chunk type \"%s\"..." s in
