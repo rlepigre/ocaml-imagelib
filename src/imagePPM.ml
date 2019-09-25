@@ -108,8 +108,12 @@ module ReadPPM : ReadImage = struct
        let image = create_grey ~max_val:max_val w h in
        for y = 0 to h - 1 do
          for x = 0 to w - 1 do
-           Scanf.bscanf scanner "%d%[\t\n ]" (fun v _ ->
-             write_grey image x y v)
+           begin try
+             Scanf.bscanf scanner "%d%[\t\n ]" (fun v _ ->
+               write_grey image x y v)
+           with Stdlib.Scanf.Scan_failure _ ->
+             raise(Image.Corrupted_image "PPM: Invalid grayscale pixel data")
+           end
          done
        done;
        image
