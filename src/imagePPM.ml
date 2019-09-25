@@ -53,12 +53,16 @@ module ReadPPM : ReadImage = struct
       Scanf.bscanf scanner "%u%1[\t\n ]" (fun h _ -> height := h)
     end else begin
       begin try
-      Scanf.bscanf scanner "%u%[\t\n ]" (fun w _ -> width := w);
-      with _ ->
+        Scanf.bscanf scanner "%u%[\t\n ]" (fun w _ -> width := w);
+      with Stdlib.Scanf.Scan_failure _ ->
         raise(Image.Corrupted_image "PPM: invalid width")
       end;
       pass_comments ();
-      Scanf.bscanf scanner "%u%[\t\n ]" (fun h _ -> height := h);
+      begin try
+        Scanf.bscanf scanner "%u%[\t\n ]" (fun h _ -> height := h);
+      with Stdlib.Scanf.Scan_failure _ ->
+        raise(Image.Corrupted_image "PPM: invalid height")
+      end;
       pass_comments ();
       Scanf.bscanf scanner "%u%1[\t\n ]" (fun mv _ -> max_val := mv)
     end ;
