@@ -2,7 +2,7 @@
   (names tests aflrunner)
   (public_names yo lo)
   (package imagelib-unix)
-  (libraries imagelib imagelib-unix crowbar alcotest)
+  (libraries imagelib imagelib-unix crowbar alcotest afl-persistent)
 )
 (alias
   (name runtest)
