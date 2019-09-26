@@ -554,6 +554,13 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
     Printexc.record_backtrace true; (* TODO *)
     let [@inline always] rec parse_blocks gif_state
       : image option * int * read_state option =
+      (* with the exception of LogicalScreenDescriptor and GlobalColorTable,
+         all all other Control blocks have a liited scope restricted to the Grapic-Rendering block that follows them. TODO.
+         3b..3b -> trailer
+         00..7f -> Graphic Rendering block
+         80..f9 -> Control Blocks
+         fa..ff -> Special Purpose blocks
+      *)
       match (get_bytes ich 1).[0] with
       | '\x3b' -> None, gif_state.display_time, None (* End of file *)
 
@@ -615,10 +622,6 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
                 (*Image.fill_alpha gif_state.buffer 0xFF*)
 
               | 4 -> (* overwrite graphic with previous graphic*)
-                (* TODO *)
-                begin if !debug then
-                  Printf.fprintf stderr "GIF:GDM:4 overwrite with previous\n%!"
-                end ;
                 Image.fill_alpha gif_state.buffer 0xFF
               (* TODO unclear if this means that alpha should show *)
               (* The background color or background tile - rather than a previous frame - shows through transparent pixels. In the GIF specification, you can set a background color. In Netscape, it's the page's background color or background GIF that shows through.
@@ -641,11 +644,14 @@ The thing to remember about Restore to Previous is that it's not necessarily the
             (* TODO technically identifier must be printable ASCII too*)
             let authentcode = get_bytes ich 3 in
             let subblock_len = chunk_byte ich in
+            (* https://github.com/ArtifexSoftware/mupdf/blob/master/source/fitz/load-gif.c *)
             begin match identifier, authentcode, subblock_len with
               | "NETSCAPE", "2.0", 3
               | "ANIMEXTS", "1.0", 3 ->
                 (* Netscape animated GIF looping extension
-                   http://www.vurdalakov.net/misc/gif/netscape-looping-application-extension*)
+                   http://www.vurdalakov.net/misc/gif/netscape-looping-application-extension
+                   http://www.vurdalakov.net/misc/gif/animexts-looping-application-extension
+                *)
                 let subblock = get_bytes ich subblock_len in
                 if subblock.[0] <> '\x01' then
                   raise @@ Corrupted_image
@@ -661,15 +667,33 @@ The thing to remember about Restore to Previous is that it's not necessarily the
                        "GIF ApplicationExtension subblock terminator \
                         expected 0x00, got %#x" terminator)
 
+              (* section B.6: http://www.color.org/icc1V42.pdf *)
+              | "ICCRGBG1", "012", n
               | "ImageMag", "ick", n
               | "MGK8BIM0", "000", n
               | "MGKIPTC0", "000", n
                 (* https://github.com/ImageMagick/ImageMagick/blob/master/coders/gif.c#L1164 *)
                 (* we ignore this, seems like it usually contains something
                    like "gamma=0.5" *)
-              | "ICCRGBG1", "012", n
+
+              (* Zoner GIF animator 4.0 and 5.0 *)
+              | ( "ZGATEXTI" | "ZGATILEI"
+                | "ZGACTRLI" | "ZGAVECTI"), "\x35\x00\x00", n
+              | ( "ZGANPIMG" | "ZGAALPHA"), "I5\x00", n
+              | ( "ZGATITLE" | "ZGATEXTI"), "4.0", n
+
+              (* http://fractint.net/fractsvn/trunk/fractint/common/loadfile.c *)
+              | "fract", "int", n
+
+              (* http://wwwimages.adobe.com/www.adobe.com/content/dam/Adobe/en/devnet/xmp/pdfs/XMPSpecificationPart3.pdf *)
               | "XMP Data", "XMP", n ->
-                let _ = get_bytes ich (n+1) in ()
+                let rec skip = function
+                  (* End subblock parsing once we reach the
+                     Block Terminator a.k.a. `0`: *)
+                  | 0 -> ()
+                  | n ->  let _ = get_bytes ich (n) in
+                          skip (chunk_byte ich)
+                in skip n
 
               | _ ->
                 raise @@ Corrupted_image
