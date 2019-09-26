@@ -642,7 +642,8 @@ The thing to remember about Restore to Previous is that it's not necessarily the
             let authentcode = get_bytes ich 3 in
             let subblock_len = chunk_byte ich in
             begin match identifier, authentcode, subblock_len with
-              | "NETSCAPE", "2.0", 3 ->
+              | "NETSCAPE", "2.0", 3
+              | "ANIMEXTS", "1.0", 3 ->
                 (* Netscape animated GIF looping extension
                    http://www.vurdalakov.net/misc/gif/netscape-looping-application-extension*)
                 let subblock = get_bytes ich subblock_len in
@@ -659,11 +660,17 @@ The thing to remember about Restore to Previous is that it's not necessarily the
                     (Printf.sprintf
                        "GIF ApplicationExtension subblock terminator \
                         expected 0x00, got %#x" terminator)
-              | "ImageMag", "ick", n ->
+
+              | "ImageMag", "ick", n
+              | "MGK8BIM0", "000", n
+              | "MGKIPTC0", "000", n
                 (* https://github.com/ImageMagick/ImageMagick/blob/master/coders/gif.c#L1164 *)
                 (* we ignore this, seems like it usually contains something
                    like "gamma=0.5" *)
+              | "ICCRGBG1", "012", n
+              | "XMP Data", "XMP", n ->
                 let _ = get_bytes ich (n+1) in ()
+
               | _ ->
                 raise @@ Corrupted_image
                   (Printf.sprintf
