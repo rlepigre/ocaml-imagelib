@@ -438,7 +438,8 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
       0x80 (* local color table *)
       lor 0b111 (* color table size *)
     in
-    assert (0 = flags land 0x40);
+    if (0 <> flags land 0x40) then
+      raise (Not_yet_implemented "GIF interlace feature flag") ;
 
     if 0 <> flags land (lnot implemented_flags) then
       raise (Not_yet_implemented
