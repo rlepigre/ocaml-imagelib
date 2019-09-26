@@ -334,7 +334,10 @@ end = struct
           | symbol when symbol = eoi_code ->
             {state with previous_symbol = symbol}
           | symbol when state.previous_symbol = clear_code ->
-            assert (symbol < color_table_size) ;
+            if (symbol >= color_table_size) then
+              raise (Corrupted_image (
+                  Printf.sprintf "GIF: %s: symbol:%d >= color_table_size:%d"
+                    __LOC__ symbol color_table_size)) ;
             emit_pixel image state.x state.y symbol ;
             let state = next_coord state in
             {state with
