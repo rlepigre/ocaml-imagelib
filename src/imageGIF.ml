@@ -585,7 +585,9 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
             let user_input_flag = (packed lsr 1) land 1 in
             (* The Reserved subfield is not used in GIF89a and
                is always set to 0: *)
-            assert (0 = packed lsr 5);
+            begin if 0 <> packed lsr 5 then
+              raise (Corrupted_image "GIF: Reserved GIF89a bit set.")
+            end ;
             (* TODO maybe assert that GDM must be 0 if there's no transparency at play? *)
             (* http://webreference.com/content/studio/disposal.html *)
             let graphics_disposal_method = match (packed lsr 2) land 0b111 with
@@ -613,7 +615,10 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
                 (*Image.fill_alpha gif_state.buffer 0xFF*)
 
               | 4 -> (* overwrite graphic with previous graphic*)
-                ignore @@ failwith "yy";
+                (* TODO *)
+                begin if !debug then
+                  Printf.fprintf stderr "GIF:GDM:4 overwrite with previous\n%!"
+                end ;
                 Image.fill_alpha gif_state.buffer 0xFF
               (* TODO unclear if this means that alpha should show *)
               (* The background color or background tile - rather than a previous frame - shows through transparent pixels. In the GIF specification, you can set a background color. In Netscape, it's the page's background color or background GIF that shows through.
