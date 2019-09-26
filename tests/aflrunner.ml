@@ -14,6 +14,7 @@ let perform () =
   match f ~extension:(extension Sys.argv.(2)) chunk_reader with
   | _ -> ()
   | exception End_of_file -> ()
-  | exception Image.Corrupted_image(_) -> ()
+  | exception Image.Corrupted_image _ -> ()
+  | exception Image.Not_yet_implemented _ -> ()
 
 let () = AflPersistent.run perform
