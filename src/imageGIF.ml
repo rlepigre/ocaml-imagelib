@@ -536,6 +536,9 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
                 Global Color Table will immediately follow the
                 Logical Screen Descriptor.*)
               let gct = get_bytes ich gct_bytesize in
+              if header.bg_color_index * 3 > String.length gct then
+                raise (Image.Corrupted_image
+                         "GIF: bg_color_index larger than GlobalColorTable");
 
               (* initialize with bgcolor if there's a global color table: *)
               fill_background_color buffer gct header.bg_color_index ;
