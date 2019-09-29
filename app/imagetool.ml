@@ -2,6 +2,7 @@ type config = {
   input_file : string;
   display_mode: [`IRC | `VT100] option;
   background: int; (* RGB *)
+  crop_x : int;
   output_file : string option;
 }
 
@@ -16,6 +17,7 @@ let arg_parser array : config =
       erase leftover {config with background = int_of_string bg} tl
     | "--irc"::tl -> set_display_mode `IRC tl
     | "--vt100"::tl -> set_display_mode `VT100 tl
+    | "--crop-x"::w::tl -> erase leftover {config with crop_x = int_of_string w} tl
     | x :: _ when String.index_opt x '-' = Some 0 ->
       invalid_arg (Printf.sprintf "Unknown switch: %S" x)
     | input_file::tl when config.input_file = "" ->
@@ -30,6 +32,7 @@ let arg_parser array : config =
                    input_file = "" ;
                    background = 0;
                    output_file = None ;
+                   crop_x = 999999;
                  } (Array.to_list array |> List.tl)
   with
   | config, [| |] when config.input_file <> "" -> config
@@ -62,12 +65,12 @@ let () =
   let foreach_pixel f img =
     for y = 0 to img.Image.height -1 do
       let current = ref (-1,-1,-1) in
-      for x = 0 to img.width -1 do
+      for x = 0 to (min config.crop_x img.width) -1 do
         Image.read_rgba img x y (fun r g b a ->
             let out, next = f ?current:(Some !current) r g b a in
             current := next;
             print_string out)
-      done; print_newline () ;
+      done; print_endline "\x1b[0m\r" ;
     done
   in
   let read_next =
