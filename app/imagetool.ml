@@ -3,6 +3,7 @@ type config = {
   display_mode: [`IRC | `VT100] option;
   background: int; (* RGB *)
   crop_x : int;
+  resize : (int * int) option;
   output_file : string option;
 }
 
@@ -17,7 +18,11 @@ let arg_parser array : config =
       erase leftover {config with background = int_of_string bg} tl
     | "--irc"::tl -> set_display_mode `IRC tl
     | "--vt100"::tl -> set_display_mode `VT100 tl
-    | "--crop-x"::w::tl -> erase leftover {config with crop_x = int_of_string w} tl
+    | "--resizexy"::x::y::tl ->
+      erase leftover {config with
+                      resize = Some (int_of_string x, int_of_string y)} tl
+    | "--crop-x"::w::tl ->
+      erase leftover {config with crop_x = int_of_string w} tl
     | x :: _ when String.index_opt x '-' = Some 0 ->
       invalid_arg (Printf.sprintf "Unknown switch: %S" x)
     | input_file::tl when config.input_file = "" ->
@@ -31,6 +36,7 @@ let arg_parser array : config =
   match erase [] { display_mode = Some `VT100 ;
                    input_file = "" ;
                    background = 0;
+                   resize = None ;
                    output_file = None ;
                    crop_x = 999999;
                  } (Array.to_list array |> List.tl)
@@ -80,7 +86,13 @@ let () =
     let rec loop last_parsed_ts state =
       match read_next state with
       | None, _, _ -> ()
-      | Some img, delay, state ->
+      | Some input_img, delay, state ->
+        let img = match config.resize with
+          | None -> input_img
+          | Some (x,y) ->
+            let dst = Image.create_rgb ~alpha:true ~max_val:65535 x y in
+            Image.Resize.scale_copy_layer dst ~src:input_img 2.2
+        in
         let delay = float delay /. 100. in
         let parsed_ts = Unix.gettimeofday() in
         Unix.sleepf (max 0. (delay -. (parsed_ts -. last_parsed_ts)));

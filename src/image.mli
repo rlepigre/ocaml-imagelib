@@ -125,3 +125,7 @@ module type WriteImage =
   end
 
 exception Not_yet_implemented of string
+
+module Resize : sig
+  val scale_copy_layer : image -> src:image -> float -> image
+end

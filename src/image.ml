@@ -314,3 +314,107 @@ let copy i = let open Pixmap in
        | GreyA (ii,aa) -> GreyA (copy ii, copy aa)
        | RGB (rr,gg,bb)-> RGB (copy rr, copy gg, copy bb)
        | RGBA (rr,gg,bb,aa) -> RGBA (copy rr, copy gg, copy bb, copy aa) }
+
+module Resize = struct
+  let exp2linear pixel gamma =
+    Float.pow ((float_of_int pixel) /. 255.0) gamma
+
+  let s2rgba (s:int array) gamma =
+    let num = match s with
+      | [| r ; g ; b |] -> [| r ; g ; b ; 255 |]
+      | whatever -> whatever
+    in Array.map (fun c -> exp2linear c gamma) num
+
+  let clamp v _min _max: int =
+    let n = max _min (min v _max) in
+    Printf.printf "n:%d <- v:%d min:%d max:%d\n" n v _min _max;
+    n
+
+  let get_rgba o_x o_y gamma (image:image) : float array =
+    let x = clamp o_x 1 (image.width -1) in
+    let y = clamp o_y 1 (image.width -1) in
+    Printf.printf "image.width:%d x:%d[%d] y:%x[%d]\n" image.width
+      x o_x
+      y o_y;
+    let colors = read_rgba image x y (fun r g b a -> [| r;g;b;a |]) in
+    s2rgba colors gamma
+
+  let weighted_sum dx dy s00 s10 s01 s11 =
+    ((1. -. dy) *. ((1. -. dx) *. s00 +. dx *. s10)
+     +. dy *. ((1. -. dx) *. s01 +. dx *. s11))
+
+  let interpolate_bilinear_gimp src_region sx sy xfrac yfrac gamma =
+    Printf.printf "get_rgba sx:%d (sy+1):%d gamma:%f\n" sx(sy+1)gamma;
+    let p1 = get_rgba  sx       sy      gamma src_region in
+    let p2 = get_rgba (sx + 1)  sy      gamma src_region in
+    let p3 = get_rgba  sx      (sy + 1) gamma src_region in
+    let p4 = get_rgba (sx + 1) (sy + 1) gamma src_region in
+
+    let pixel = [| 0 ; 0 ; 0 ; 255 |] in (* 0 for alpha *)
+
+    (* TODO 
+    if src_layer.has_alpha:
+        alphasum = weighted_sum(xfrac, yfrac, p1[3], p2[3], p3[3], p4[3])
+        if alphasum > 0:
+            for b in xrange(0, 3):
+                sum = weighted_sum(xfrac, yfrac,
+                        p1[b] * p1[3], p2[b] * p2[3],
+                        p3[b] * p3[3], p4[b] * p4[3])
+                sum = sum / float(alphasum);
+
+                pixel[b] = CLAMP(sum, 0, 255)
+
+            pixel[3] = CLAMP(alphasum, 0, 255)
+    else:
+*)
+    for b = 0 to 2 do
+      let sum = weighted_sum xfrac yfrac p1.(b) p2.(b) p3.(b) p4.(b) in
+      pixel.(b) <- clamp (int_of_float sum) 0 255
+    done ;
+
+    pixel
+
+
+  let linear2exp linear gamma =
+    (Float.pow linear (1.0 /. gamma)) *. 255.
+
+  let rgb2s rgba gamma =
+    Array.map (fun e -> int_of_float @@ linear2exp e gamma)rgba
+
+  let set_rgba ~x ~y rgba gamma (region:image) =
+    (*
+    if layer.has_alpha:
+        region[x, y] = rgba2s(rgba, gamma)
+    else:*)
+    (*region[x, y] = rgb2s(rgba[0:3], gamma)*)
+    match rgb2s rgba gamma with
+      [| r; g; b |]
+    | [| r ; g; b ; _ |] ->
+      write_rgb region x y r g b
+    | _ -> failwith "rgb2s"
+
+
+  let scale_copy_layer (dst:image) ~(src:image) (*interpol*) gamma =
+    let interpol = interpolate_bilinear_gimp in
+    let scalex = float src.width /. float dst.width in
+    let scaley = float src.height /. float dst.height in
+
+    for y = 0 to dst.height -1 do
+      for x = 0 to dst.width -1 do
+        let yfrac = (float y +. 0.5) *. scaley -. 0.5 in
+        let sy = int_of_float yfrac in
+        let yfrac = yfrac -. float sy in
+
+        let xfrac = (float x +. 0.5) *. scalex -. 0.5 in
+        let sx = int_of_float xfrac in
+        let xfrac = xfrac -. float sx in
+
+        let rgba = interpol src sx sy xfrac yfrac gamma  in
+        let rgba = Array.map float_of_int rgba in
+
+        set_rgba ~x ~y rgba gamma dst
+
+      done
+    done ;
+    dst
+end
