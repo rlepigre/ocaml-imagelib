@@ -316,14 +316,14 @@ let copy i = let open Pixmap in
        | RGBA (rr,gg,bb,aa) -> RGBA (copy rr, copy gg, copy bb, copy aa) }
 
 module Resize = struct
-  let s2rgba (s:int array) gamma =
+  let s2rgba gamma (s:int array) =
     let max_val = 255 in (* TODO *)
     let max_valf = 255. in (* TODO *)
     let exp2linear pixel gamma =
       Float.pow ((float_of_int pixel) /. max_valf) gamma in
     let num = match s with
       | [| r ; g ; b |] -> [| r ; g ; b ; max_val |]
-      | [| r ; g ; b ; _a |] -> [| r ; g ; b ; max_val |] (* TODO *)
+      | [| r ; g ; b ; a |] -> [| r ; g ; b ; a |] (* TODO *)
       | _whatever -> raise (Invalid_argument "TODO")
     in Array.map (fun c -> exp2linear c gamma) num
 
@@ -332,13 +332,13 @@ module Resize = struct
 
 
   let get_rgba o_x o_y gamma (image:image) : float array =
-    let x = clamp o_x 1 (image.width -1) in
-    let y = clamp o_y 1 (image.width -1) in
-    Printf.printf "image.width:%d x:%d[%d] y:%x[%d]\n" image.width
+    let x = clamp o_x 0 (image.width -1) in
+    let y = clamp o_y 0 (image.width -1) in
+    (*Printf.printf "image.width:%d x:%d[%d] y:%x[%d]\n" image.width
       x o_x
-      y o_y;
-    let colors = read_rgba image x y (fun r g b a -> [| r;g;b;a |]) in
-    s2rgba colors gamma
+      y o_y;*)
+    let colors = read_rgb image x y (fun r g b -> [| r;g;b |]) in
+    s2rgba gamma colors
 
   let weighted_sum dx dy s00 s10 s01 s11 =
     (* 0..1 *)
@@ -346,7 +346,7 @@ module Resize = struct
      +. dy *. ((1. -. dx) *. s01 +. dx *. s11))
 
   let interpolate_bilinear_gimp src_region sx sy xfrac yfrac gamma =
-    Printf.printf "get_rgba sx:%d (sy+1):%d gamma:%f\n" sx(sy+1)gamma;
+    (*Printf.printf "get_rgba sx:%d (sy+1):%d gamma:%f\n" sx(sy+1)gamma;*)
     let p1 = get_rgba  sx       sy      gamma src_region in
     let p2 = get_rgba (sx + 1)  sy      gamma src_region in
     let p3 = get_rgba  sx      (sy + 1) gamma src_region in
@@ -371,6 +371,7 @@ module Resize = struct
 *)
     for b = 0 to 2 do
       let sum = weighted_sum xfrac yfrac p1.(b) p2.(b) p3.(b) p4.(b) in
+      Printf.printf "sum:%f\n" sum;
       pixel.(b) <- clamp (int_of_float (sum *. 255.)) 0 255
     done ;
 
@@ -378,7 +379,8 @@ module Resize = struct
 
 
   let linear2exp linear gamma =
-    (Float.pow linear (1.0 /. gamma)) *. 255.
+    let maxvalf = 255. in (* todo *)
+    (Float.pow linear (1.0 /. gamma)) *. maxvalf
 
   let rgb2s rgba gamma =
     Array.map (fun e -> int_of_float @@ linear2exp e gamma)rgba
@@ -390,9 +392,9 @@ module Resize = struct
     else:*)
     (*region[x, y] = rgb2s(rgba[0:3], gamma)*)
     match rgb2s rgba gamma with
-      [| r; g; b |]
-    | [| r ; g; b ; _ |] ->
-      write_rgb region x y r g b
+      [| r; g; b |] -> write_rgb region x y  r g b
+    | [| r ; g; b ; a |] ->
+      write_rgba region x y  r g b a
     | _ -> failwith "rgb2s"
 
 

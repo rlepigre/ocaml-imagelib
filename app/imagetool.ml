@@ -3,6 +3,7 @@ type config = {
   display_mode: [`IRC | `VT100] option;
   background: int; (* RGB *)
   crop_x : int;
+  gamma: float ;
   resize : (int * int) option;
   output_file : string option;
 }
@@ -18,6 +19,8 @@ let arg_parser array : config =
       erase leftover {config with background = int_of_string bg} tl
     | "--irc"::tl -> set_display_mode `IRC tl
     | "--vt100"::tl -> set_display_mode `VT100 tl
+    | "--gamma"::g::tl ->
+      erase leftover {config with gamma = float_of_string g} tl
     | "--resizexy"::x::y::tl ->
       erase leftover {config with
                       resize = Some (int_of_string x, int_of_string y)} tl
@@ -36,6 +39,7 @@ let arg_parser array : config =
   match erase [] { display_mode = Some `VT100 ;
                    input_file = "" ;
                    background = 0;
+                   gamma = 2.2;
                    resize = None ;
                    output_file = None ;
                    crop_x = 999999;
@@ -87,7 +91,7 @@ let () =
     | None -> input_img
     | Some (x,y) ->
       let dst = Image.create_rgb ~alpha:false x y in
-      Image.Resize.scale_copy_layer dst ~src:input_img 2.2
+      Image.Resize.scale_copy_layer dst ~src:input_img config.gamma
   in
   let foreach_img f_pre f =
     let rec loop last_parsed_ts state =
