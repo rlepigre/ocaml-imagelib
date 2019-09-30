@@ -316,19 +316,20 @@ let copy i = let open Pixmap in
        | RGBA (rr,gg,bb,aa) -> RGBA (copy rr, copy gg, copy bb, copy aa) }
 
 module Resize = struct
-  let exp2linear pixel gamma =
-    Float.pow ((float_of_int pixel) /. 255.0) gamma
-
   let s2rgba (s:int array) gamma =
+    let max_val = 255 in (* TODO *)
+    let max_valf = 255. in (* TODO *)
+    let exp2linear pixel gamma =
+      Float.pow ((float_of_int pixel) /. max_valf) gamma in
     let num = match s with
-      | [| r ; g ; b |] -> [| r ; g ; b ; 255 |]
-      | whatever -> whatever
+      | [| r ; g ; b |] -> [| r ; g ; b ; max_val |]
+      | [| r ; g ; b ; _a |] -> [| r ; g ; b ; max_val |] (* TODO *)
+      | _whatever -> raise (Invalid_argument "TODO")
     in Array.map (fun c -> exp2linear c gamma) num
 
-  let clamp v _min _max: int =
-    let n = max _min (min v _max) in
-    Printf.printf "n:%d <- v:%d min:%d max:%d\n" n v _min _max;
-    n
+  let clamp v _min _max =
+    max _min (min v _max)
+
 
   let get_rgba o_x o_y gamma (image:image) : float array =
     let x = clamp o_x 1 (image.width -1) in
@@ -340,6 +341,7 @@ module Resize = struct
     s2rgba colors gamma
 
   let weighted_sum dx dy s00 s10 s01 s11 =
+    (* 0..1 *)
     ((1. -. dy) *. ((1. -. dx) *. s00 +. dx *. s10)
      +. dy *. ((1. -. dx) *. s01 +. dx *. s11))
 
@@ -350,7 +352,7 @@ module Resize = struct
     let p3 = get_rgba  sx      (sy + 1) gamma src_region in
     let p4 = get_rgba (sx + 1) (sy + 1) gamma src_region in
 
-    let pixel = [| 0 ; 0 ; 0 ; 255 |] in (* 0 for alpha *)
+    let pixel = [| 0 ; 0 ; 0 ; src_region.max_val |] in (* 0 for alpha *)
 
     (* TODO 
     if src_layer.has_alpha:
@@ -369,7 +371,7 @@ module Resize = struct
 *)
     for b = 0 to 2 do
       let sum = weighted_sum xfrac yfrac p1.(b) p2.(b) p3.(b) p4.(b) in
-      pixel.(b) <- clamp (int_of_float sum) 0 255
+      pixel.(b) <- clamp (int_of_float (sum *. 255.)) 0 255
     done ;
 
     pixel

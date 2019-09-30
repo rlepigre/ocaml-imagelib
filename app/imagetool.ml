@@ -82,17 +82,19 @@ let () =
   let read_next =
     ImageLib.openfile_streaming ~extension:(extension config.input_file)
       (ImageUtil_unix.chunk_reader_of_path config.input_file) in
+  let handle_resize input_img =
+    match config.resize with
+    | None -> input_img
+    | Some (x,y) ->
+      let dst = Image.create_rgb ~alpha:false x y in
+      Image.Resize.scale_copy_layer dst ~src:input_img 2.2
+  in
   let foreach_img f_pre f =
     let rec loop last_parsed_ts state =
       match read_next state with
       | None, _, _ -> ()
-      | Some input_img, delay, state ->
-        let img = match config.resize with
-          | None -> input_img
-          | Some (x,y) ->
-            let dst = Image.create_rgb ~alpha:true ~max_val:65535 x y in
-            Image.Resize.scale_copy_layer dst ~src:input_img 2.2
-        in
+      | Some o'img, delay, state ->
+        let img = handle_resize o'img in
         let delay = float delay /. 100. in
         let parsed_ts = Unix.gettimeofday() in
         Unix.sleepf (max 0. (delay -. (parsed_ts -. last_parsed_ts)));
@@ -124,6 +126,7 @@ let () =
         Printf.eprintf "TODO NOT IMPLEMENTED: Writing image with >1 frames" ;
         exit 1
     in
+    let img = handle_resize img in
     (* output to filename specified in second argument *)
     if Sys.(file_exists fn)
     then begin
