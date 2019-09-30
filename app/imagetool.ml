@@ -3,8 +3,9 @@ type config = {
   display_mode: [`IRC | `VT100] option;
   background: int; (* RGB *)
   crop_x : int;
+  crop_y : int;
   gamma: float ;
-  resize : (int * int) option;
+  resize : [`Original | `Percent of float | `Dim of (int * int) ];
   output_file : string option;
 }
 
@@ -21,29 +22,46 @@ let arg_parser array : config =
     | "--vt100"::tl -> set_display_mode `VT100 tl
     | "--gamma"::g::tl ->
       erase leftover {config with gamma = float_of_string g} tl
-    | "--resizexy"::x::y::tl ->
-      erase leftover {config with
-                      resize = Some (int_of_string x, int_of_string y)} tl
+    | "--resize"::size::tl ->
+      let m = String.index_opt size in
+      let last = String.length size -1 in
+      let resize = match m '%', m 'x' with
+        | Some idx , None when idx = last ->
+          Printf.printf "xx\n%!";
+          `Percent (float_of_string (String.sub size 0 idx))
+        | None, Some idx when idx > 0 && idx < String.length size -1 ->
+          `Dim String.((int_of_string @@ sub size 0 idx),
+                       (int_of_string @@ sub size (succ idx) @@ last-idx))
+        | _ -> invalid_arg "Incorrect --resize parameter, see --help"
+      in
+      erase leftover {config with resize} tl
     | "--crop-x"::w::tl ->
       erase leftover {config with crop_x = int_of_string w} tl
+    | "--crop-y"::h::tl ->
+      erase leftover {config with crop_y = int_of_string h} tl
     | x :: _ when String.index_opt x '-' = Some 0 ->
       invalid_arg (Printf.sprintf "Unknown switch: %S" x)
     | input_file::tl when config.input_file = "" ->
       erase leftover {config with input_file } tl
     | output_file::tl when config.output_file = None ->
       erase leftover {config with display_mode = None ;
-                      output_file = Some output_file} tl
+                                  output_file = Some output_file} tl
+    | bad::_ when String.index_opt bad '-' = Some 0 ->
+      invalid_arg (Printf.sprintf "Missing paramter for %S" bad)
     | unknown::_ ->
       invalid_arg (Printf.sprintf "Unknown argument %S" unknown)
   in
-  match erase [] { display_mode = Some `VT100 ;
-                   input_file = "" ;
-                   background = 0;
-                   gamma = 2.2;
-                   resize = None ;
-                   output_file = None ;
-                   crop_x = 999999;
-                 } (Array.to_list array |> List.tl)
+  match erase [] {
+      (* default configuration *)
+      display_mode = Some `VT100 ;
+      input_file = "" ;
+      background = 0;
+      gamma = 2.2;
+      resize = `Original ;
+      output_file = None ;
+      crop_x = 65535;
+      crop_y = 65535;
+    } (Array.to_list array |> List.tl)
   with
   | config, [| |] when config.input_file <> "" -> config
   | _, extraneous ->
@@ -57,6 +75,13 @@ let arg_parser array : config =
     Printf.eprintf "(if OUTPUT-FILE is specified)\n" ;
     Printf.eprintf "Options:\n";
     Printf.eprintf "--irc | --vt100   Output to terminal using escape codes\n" ;
+    Printf.eprintf
+      "--resize          Set output dimensions. Syntax: '80x25' | '10%%'\n";
+    Printf.eprintf "  \\--gamma        Adjust/reinterpret gamma\n";
+    Printf.eprintf
+      "--crop-x WIDTH         Crop final output to WIDTH pixels\n" ;
+    Printf.eprintf
+      "--crop-y HEIGHT        Crop final output to HEIGHT pixels\n" ;
     Printf.eprintf "--background      Set background color for transparency";
     Printf.eprintf " using RGB,\n";
     Printf.eprintf "                  e.g. '0xFF0000' is red.";
@@ -73,7 +98,7 @@ let () =
     String.(sub filename ri @@ (length filename) - ri)
   in
   let foreach_pixel f img =
-    for y = 0 to img.Image.height -1 do
+    for y = 0 to (min config.crop_y img.Image.height) -1 do
       let current = ref (-1,-1,-1) in
       for x = 0 to (min config.crop_x img.width) -1 do
         Image.read_rgba img x y (fun r g b a ->
@@ -87,18 +112,27 @@ let () =
     ImageLib.openfile_streaming ~extension:(extension config.input_file)
       (ImageUtil_unix.chunk_reader_of_path config.input_file) in
   let handle_resize input_img =
-    match config.resize with
-    | None -> input_img
-    | Some (x,y) ->
+    let doit x y =
+      let x, y = max 1 x, max 1 y in
       let dst = Image.create_rgb ~alpha:false x y in
       Image.Resize.scale_copy_layer dst ~src:input_img config.gamma
+    in
+    match config.resize with
+    | `Original -> input_img
+    | `Dim (x,y) -> doit x y
+    | `Percent p -> doit (int_of_float @@ float input_img.width *. p /. 100.0)
+                      (int_of_float @@ float input_img.height *. p /. 100.0)
+  in
+  let handle_crop (img:Image.image) =
+    {img with width = min img.width config.crop_x ;
+              height = min img.height config.crop_y }
   in
   let foreach_img f_pre f =
     let rec loop last_parsed_ts state =
       match read_next state with
       | None, _, _ -> ()
       | Some o'img, delay, state ->
-        let img = handle_resize o'img in
+        let img = handle_resize o'img |> handle_crop in
         let delay = float delay /. 100. in
         let parsed_ts = Unix.gettimeofday() in
         Unix.sleepf (max 0. (delay -. (parsed_ts -. last_parsed_ts)));
@@ -130,7 +164,7 @@ let () =
         Printf.eprintf "TODO NOT IMPLEMENTED: Writing image with >1 frames" ;
         exit 1
     in
-    let img = handle_resize img in
+    let img = handle_resize img |> handle_crop in
     (* output to filename specified in second argument *)
     if Sys.(file_exists fn)
     then begin

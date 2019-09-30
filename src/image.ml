@@ -352,7 +352,8 @@ module Resize = struct
     let p3 = get_rgba  sx      (sy + 1) gamma src_region in
     let p4 = get_rgba (sx + 1) (sy + 1) gamma src_region in
 
-    let pixel = [| 0 ; 0 ; 0 ; src_region.max_val |] in (* 0 for alpha *)
+    let pixel = [| 0. ; 0. ; 0. ;
+                   float src_region.max_val |] in (* 0 for alpha *)
 
     (* TODO 
     if src_layer.has_alpha:
@@ -371,8 +372,7 @@ module Resize = struct
 *)
     for b = 0 to 2 do
       let sum = weighted_sum xfrac yfrac p1.(b) p2.(b) p3.(b) p4.(b) in
-      Printf.printf "sum:%f\n" sum;
-      pixel.(b) <- clamp (int_of_float (sum *. 255.)) 0 255
+      pixel.(b) <- clamp sum 0. 1.0
     done ;
 
     pixel
@@ -391,10 +391,12 @@ module Resize = struct
         region[x, y] = rgba2s(rgba, gamma)
     else:*)
     (*region[x, y] = rgb2s(rgba[0:3], gamma)*)
-    match rgb2s rgba gamma with
-      [| r; g; b |] -> write_rgb region x y  r g b
+    let c = rgb2s rgba gamma in
+    let rgba = Array.map (fun v -> v) c in
+    match rgba with
+      [| r; g; b |] -> write_rgb region x y r g b
     | [| r ; g; b ; a |] ->
-      write_rgba region x y  r g b a
+      write_rgba region x y r g b a
     | _ -> failwith "rgb2s"
 
 
@@ -414,7 +416,6 @@ module Resize = struct
         let xfrac = xfrac -. float sx in
 
         let rgba = interpol src sx sy xfrac yfrac gamma  in
-        let rgba = Array.map float_of_int rgba in
 
         set_rgba ~x ~y rgba gamma dst
 
