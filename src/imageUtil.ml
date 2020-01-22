@@ -39,6 +39,11 @@ let chunk_printf : 'x. chunk_writer ->
   ('x, unit, string, unit) format4 -> 'x = fun och ->
   Printf.kprintf (chunk_write och)
 
+let chunk_writer_of_buffer (buf:Buffer.t) =
+  function
+  | `String s -> Buffer.add_string buf s; Ok ()
+  | `Close -> Ok ()
+
 open Stdlib
 
 
