@@ -50,10 +50,13 @@ module PNG_Zlib = struct
   let uncompress_string (in_str:string) : string =
     let len = String.length in_str in
     let in_pos = ref 0 in
-    let window = De.make_window ~bits:15 in
     let buf_len = 0xffff in
     let in_buf, out_buf = Bigstringaf.(create buf_len, create buf_len) in
     let final_output = Buffer.create (len / 3) in (* approx avg rate *)
+
+    let alloc_window bits =
+      De.make_window ~bits
+    in
 
     let refill bigstr : int =
       let remaining = len - !in_pos in
@@ -69,7 +72,7 @@ module PNG_Zlib = struct
       Buffer.add_string final_output str
     in
 
-    De.Higher.uncompress ~w:window ~i:in_buf
+    Zl.Higher.uncompress ~allocate:alloc_window ~i:in_buf
       ~o:out_buf ~refill ~flush;
 
     Buffer.contents final_output
@@ -98,7 +101,7 @@ module PNG_Zlib = struct
       Buffer.add_string final_output str
     in
 
-    De.Higher.compress (*~level:4*) ~w:window ~q:queue
+    Zl.Higher.compress ~level:4 ~w:window ~q:queue
       ~i:in_buf ~o:out_buf ~refill ~flush;
 
     Buffer.contents final_output
