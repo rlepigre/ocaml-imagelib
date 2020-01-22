@@ -18,7 +18,6 @@
  *)
 open ImageUtil
 open Image
-open ImageChannels
 
 let debug = ref false
 
@@ -46,71 +45,65 @@ type pixel =
 
  ****************************************************************************)
 module PNG_Zlib = struct
-  exception PNG_Zlib_error of string
 
-  open Decompress
-
-  let uncompress_string (input_ro:string) : string =
-    let len = String.length input_ro in
-    let inputpos = ref 0 in
-    let input_temp, output_temp = Bytes.(create 0xFFFF, create 0xFFFF) in
+  let uncompress_string (in_str:string) : string =
+    let len = String.length in_str in
+    let in_pos = ref 0 in
+    let buf_len = 0xffff in
+    let in_buf, out_buf = Bigstringaf.(create buf_len, create buf_len) in
     let final_output = Buffer.create (len / 3) in (* approx avg rate *)
 
-    let refill (strbuf:Bytes.t) : int =
-      let remaining = len - !inputpos in
-      let tocopy = min 0xFFFF remaining in
-      Bytes.blit_string input_ro !inputpos strbuf 0 tocopy;
-      inputpos := !inputpos + tocopy;
-      tocopy
+    let alloc_window bits =
+      De.make_window ~bits
     in
 
-    let flush strbuf len =
-      Buffer.add_subbytes final_output strbuf 0 len ;
-      0xFFFF
+    let refill bigstr : int =
+      let remaining = len - !in_pos in
+      let to_copy = min buf_len remaining in
+      Bigstringaf.blit_from_string in_str
+        ~src_off:!in_pos bigstr ~dst_off:0 ~len:to_copy;
+      in_pos := !in_pos + to_copy;
+      to_copy
     in
 
-    let window = Window.create ~witness:B.Bytes in
+    let flush bigstr f_len =
+      let str = Bigstringaf.substring bigstr ~off:0 ~len:f_len in
+      Buffer.add_string final_output str
+    in
 
-    begin match
-        Zlib_inflate.bytes input_temp output_temp
-          refill flush Zlib_inflate.(default ~witness:B.bytes window) with
-    | Error _ ->
-      let msg = Printf.sprintf "Decompress.Inflate.bytes failed ..." in
-      raise (PNG_Zlib_error msg);
-    | Ok _ -> Buffer.contents final_output
-    end
+    Zl.Higher.uncompress ~allocate:alloc_window ~i:in_buf
+      ~o:out_buf ~refill ~flush;
 
-  let compress_string (inputstr:string) : string =
-    let len = String.length inputstr in
-    let inputpos = ref 0 in
-    let input_temp, output_temp = Bytes.(create 0xFFFF , create 0xFFFF) in
+    Buffer.contents final_output
+
+  let compress_string (in_str:string) : string =
+
+    let len = String.length in_str in
+    let in_pos = ref 0 in
+    let window = De.make_window ~bits:15 in
+    let buf_len = 0x10000 in
+    let queue = De.Queue.create buf_len in
+    let in_buf, out_buf = Bigstringaf.(create buf_len , create buf_len) in
     let final_output = Buffer.create (len * 3) in (* approx avg rate *)
 
-    let refill strbuf _max : int =
-      let max = match _max with None -> 0xFFFF | Some m -> m in
-      let remaining = len - !inputpos in
-      let tocopy = min max remaining in
-      Bytes.blit_string inputstr !inputpos strbuf 0 tocopy;
-      inputpos := !inputpos + tocopy;
-      tocopy
+    let refill bigstr : int =
+      let remaining = len - !in_pos in
+      let to_copy = min buf_len remaining in
+      Bigstringaf.blit_from_string in_str
+        ~src_off:!in_pos bigstr ~dst_off:0 ~len:to_copy;
+      in_pos := !in_pos + to_copy;
+      to_copy
     in
 
-    let flush strbuf f_len =
-      Buffer.add_subbytes final_output strbuf 0 f_len ; 0xFFFF
+    let flush bigstr f_len =
+      let str = Bigstringaf.substring bigstr ~off:0 ~len:f_len in
+      Buffer.add_string final_output str
     in
 
-    (* Computations<->size trade-off (see Decompress.Deflate.default): *)
-    let compression_level = 4 in
+    Zl.Higher.compress ~level:3 ~w:window ~q:queue
+      ~i:in_buf ~o:out_buf ~refill ~flush;
 
-    let window = Zlib_deflate.default ~witness:B.Bytes compression_level in
-
-    begin match Zlib_deflate.bytes input_temp output_temp
-                  refill flush window with
-    | Error _ ->
-      let msg = Printf.sprintf "Decompress.Deflate.bytes failed ..." in
-      raise (PNG_Zlib_error msg)
-    | Ok _ -> Buffer.contents final_output
-    end
+    Buffer.contents final_output
 
 end
 
@@ -996,31 +989,30 @@ module ReadPNG : ReadImage = struct
      | _ -> raise (Corrupted_image "PNG: ct <> [0;2;3;4;6]")
 end
 
-module PngWriter(O : OUT_CHANNEL) = struct
-open O
+module PngWriter = struct
 
 (****************************************************************************
  * PNG writing function                                                     *
  ****************************************************************************)
 let write_signature och =
-  output_string och png_signature
+  chunk_write och png_signature
 
-let write_chunk och chunk =
+let write_chunk (och:chunk_writer) chunk =
   let len = String.length chunk.chunk_data in
-  output_string och (int_to_str4 len |> Bytes.to_string);
-  output_string och chunk.chunk_type;
-  output_string och chunk.chunk_data;
+  chunk_write och (int_to_str4 len |> Bytes.to_string);
+  chunk_write och chunk.chunk_type;
+  chunk_write och chunk.chunk_data;
   let type_and_data = String.concat ""
     [chunk.chunk_type; chunk.chunk_data] in
   let crc = png_crc type_and_data (len + 4) in
-  let crc3 = Int32.to_int ((crc >> 24) & 0xFFl) in
-  let crc2 = Int32.to_int ((crc >> 16) & 0xFFl) in
-  let crc1 = Int32.to_int ((crc >> 8) & 0xFFl) in
-  let crc0 = Int32.to_int (crc & 0xFFl) in
-  output_char och (char_of_int crc3);
-  output_char och (char_of_int crc2);
-  output_char och (char_of_int crc1);
-  output_char och (char_of_int crc0)
+  let conv x = Int32.to_int x |> char_of_int in
+  let crc3 = ((crc >> 24) & 0xFFl) in
+  let crc2 = ((crc >> 16) & 0xFFl) in
+  let crc1 = ((crc >> 8) & 0xFFl) in
+  let crc0 = (crc & 0xFFl) in
+  let crc_s = Printf.sprintf "%c%c%c%c" (conv crc3) (conv crc2)
+    (conv crc1) (conv crc0) in
+  chunk_write och crc_s
 
 let ihdr_to_string ihdr =
   let s = Bytes.create 13 in
@@ -1033,7 +1025,7 @@ let ihdr_to_string ihdr =
   Bytes.set s 12 (char_of_int ihdr.interlace_method);
   Bytes.to_string s
 
-let output_png img och =
+let output_png img (och:chunk_writer) =
   write_signature och;
 
   let maxv = img.max_val in
@@ -1258,20 +1250,19 @@ let output_png img och =
   in output_idat_from 0;
 
   let iend = { chunk_type = "IEND" ; chunk_data = "" } in
-  write_chunk och iend
-
+  write_chunk och iend;
+  close_chunk_writer och
 end
 
-module PngWrite = PngWriter(Chunk_channel)
-module PngBufferWrite = PngWriter(Buffer_channel)
-
-let write_png och img =
-  PngWrite.output_png img och
+let write_png (och:chunk_writer) img =
+  PngWriter.output_png img och
 
 let bytes_of_png img =
   let approx_size = img.width * img.height in
   let buf = Buffer.create approx_size in
-  PngBufferWrite.output_png img buf;
+  let och = chunk_writer_of_buffer buf in
+  PngWriter.output_png img och;
+  close_chunk_writer och;
   (* Do this instead of Buffer.to_bytes to avoid copying
      since the underlying string backing the Buffer.to_bytes
      does not escape this scope: *)

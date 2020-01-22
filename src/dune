@@ -5,4 +5,4 @@
  (modules :standard)
  (flags (:standard -safe-string))
  (wrapped false)
- (libraries bigarray checkseum.ocaml decompress))
+ (libraries bigarray bigstringaf checkseum.ocaml decompress.zl stdlib-shims))

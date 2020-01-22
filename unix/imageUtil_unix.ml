@@ -76,7 +76,7 @@ let chunk_writer_of_out_channel och : chunk_writer =
     ( try Ok (output_string och x) with
       | _ -> close_out och; Error `Write_error)
   | `Close ->
-    close_out och; Ok ()
+      close_out och; Ok ()
 
 let chunk_reader_of_path fn =
   chunk_reader_of_in_channel (open_in_bin fn)
@@ -88,8 +88,3 @@ let chunk_writer_of_path fn =
 (** Define an output channel for the builtin buffered output on Uix.
     see {!ImageChannels} for more info*)
 
-module Unix_channel
-  : ImageChannels.OUT_CHANNEL with type out_channel = Pervasives.out_channel
-= struct
-  include Pervasives
-end
