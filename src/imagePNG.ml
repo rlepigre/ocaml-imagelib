@@ -18,7 +18,6 @@
  *)
 open ImageUtil
 open Image
-open ImageChannels
 
 let debug = ref false
 
@@ -990,31 +989,30 @@ module ReadPNG : ReadImage = struct
      | _ -> raise (Corrupted_image "PNG: ct <> [0;2;3;4;6]")
 end
 
-module PngWriter(O : OUT_CHANNEL) = struct
-open O
+module PngWriter = struct
 
 (****************************************************************************
  * PNG writing function                                                     *
  ****************************************************************************)
 let write_signature och =
-  output_string och png_signature
+  chunk_write och png_signature
 
-let write_chunk och chunk =
+let write_chunk (och:chunk_writer) chunk =
   let len = String.length chunk.chunk_data in
-  output_string och (int_to_str4 len |> Bytes.to_string);
-  output_string och chunk.chunk_type;
-  output_string och chunk.chunk_data;
+  chunk_write och (int_to_str4 len |> Bytes.to_string);
+  chunk_write och chunk.chunk_type;
+  chunk_write och chunk.chunk_data;
   let type_and_data = String.concat ""
     [chunk.chunk_type; chunk.chunk_data] in
   let crc = png_crc type_and_data (len + 4) in
-  let crc3 = Int32.to_int ((crc >> 24) & 0xFFl) in
-  let crc2 = Int32.to_int ((crc >> 16) & 0xFFl) in
-  let crc1 = Int32.to_int ((crc >> 8) & 0xFFl) in
-  let crc0 = Int32.to_int (crc & 0xFFl) in
-  output_char och (char_of_int crc3);
-  output_char och (char_of_int crc2);
-  output_char och (char_of_int crc1);
-  output_char och (char_of_int crc0)
+  let conv x = Int32.to_int x |> char_of_int in
+  let crc3 = ((crc >> 24) & 0xFFl) in
+  let crc2 = ((crc >> 16) & 0xFFl) in
+  let crc1 = ((crc >> 8) & 0xFFl) in
+  let crc0 = (crc & 0xFFl) in
+  let crc_s = Printf.sprintf "%c%c%c%c" (conv crc3) (conv crc2)
+    (conv crc1) (conv crc0) in
+  chunk_write och crc_s
 
 let ihdr_to_string ihdr =
   let s = Bytes.create 13 in
@@ -1027,7 +1025,7 @@ let ihdr_to_string ihdr =
   Bytes.set s 12 (char_of_int ihdr.interlace_method);
   Bytes.to_string s
 
-let output_png img och =
+let output_png img (och:chunk_writer) =
   write_signature och;
 
   let maxv = img.max_val in
@@ -1252,20 +1250,19 @@ let output_png img och =
   in output_idat_from 0;
 
   let iend = { chunk_type = "IEND" ; chunk_data = "" } in
-  write_chunk och iend
-
+  write_chunk och iend;
+  close_chunk_writer och
 end
 
-module PngWrite = PngWriter(Chunk_channel)
-module PngBufferWrite = PngWriter(Buffer_channel)
-
-let write_png och img =
-  PngWrite.output_png img och
+let write_png (och:chunk_writer) img =
+  PngWriter.output_png img och
 
 let bytes_of_png img =
   let approx_size = img.width * img.height in
   let buf = Buffer.create approx_size in
-  PngBufferWrite.output_png img buf;
+  let och = chunk_writer_of_buffer buf in
+  PngWriter.output_png img och;
+  close_chunk_writer och;
   (* Do this instead of Buffer.to_bytes to avoid copying
      since the underlying string backing the Buffer.to_bytes
      does not escape this scope: *)

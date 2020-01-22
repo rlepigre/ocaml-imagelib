@@ -1,10 +1,7 @@
 open Image
 open ImageUtil_unix
 
-module PNG = struct
-  include ImagePNG
-  module PngUnixWrite = PngWriter(Unix_channel)
-end
+module PNG = ImagePNG
 module PPM = ImagePPM
 module XCF = ImageXCF
 module JPG = ImageJPG
