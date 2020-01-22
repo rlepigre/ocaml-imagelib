@@ -50,7 +50,7 @@ module PNG_Zlib = struct
   let uncompress_string (in_str:string) : string =
     let len = String.length in_str in
     let in_pos = ref 0 in
-    let window = De.make_window ~bits:32768 in
+    let window = De.make_window ~bits:15 in
     let buf_len = 0xffff in
     let in_buf, out_buf = Bigstringaf.(create buf_len, create buf_len) in
     let final_output = Buffer.create (len / 3) in (* approx avg rate *)
@@ -78,12 +78,12 @@ module PNG_Zlib = struct
 
     let len = String.length in_str in
     let in_pos = ref 0 in
-    let window = De.make_window ~bits:32768 in
+    let window = De.make_window ~bits:15 in
     let buf_len = 0xffff in
     let queue = De.Queue.create buf_len in
     let in_buf, out_buf = Bigstringaf.(create buf_len , create buf_len) in
     let final_output = Buffer.create (len * 3) in (* approx avg rate *)
-  
+
     let refill bigstr : int =
       let remaining = len - !in_pos in
       let to_copy = min buf_len remaining in
