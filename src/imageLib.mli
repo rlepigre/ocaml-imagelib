@@ -19,8 +19,12 @@
 open Image
 open ImageUtil
 
+(* Note: For an easy to use file-based interface, see [imagelib-unix] *)
+
+
 (* [size fn] returns a couple [(w,h)] corresponding to the size of the image
-   contained in the file [fn]. The exception [{!Corrupted_image} msg] is raised
+   contained via the chunk_reader [ich].
+   The exception [{!Corrupted_image} msg] is raised
    in case of problem.
    NB: This will try to run the command "convert" from imagemagick
    to convert to PNG if the file extension is unknown.
@@ -36,6 +40,11 @@ val size : extension:string -> ImageUtil.chunk_reader -> int * int
 val openfile : extension:string -> ImageUtil.chunk_reader -> Image.image
 
 
+(* [writefile extension och img] writes the image [img] to the chunk reader [och]. 
+   The desired format is specified via [extension].
+   NB: If the file extension is unknown, this will launch "convert" from
+   imagemagick and attempt to convert from after saving a PNG.
+*)
 val writefile : extension:string ->
   ImageUtil.chunk_writer -> Image.image -> unit
 
