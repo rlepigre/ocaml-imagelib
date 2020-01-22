@@ -101,7 +101,7 @@ module PNG_Zlib = struct
       Buffer.add_string final_output str
     in
 
-    Zl.Higher.compress ~level:4 ~w:window ~q:queue
+    Zl.Higher.compress ~level:3 ~w:window ~q:queue
       ~i:in_buf ~o:out_buf ~refill ~flush;
 
     Buffer.contents final_output
