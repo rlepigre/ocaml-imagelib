@@ -46,71 +46,62 @@ type pixel =
 
  ****************************************************************************)
 module PNG_Zlib = struct
-  exception PNG_Zlib_error of string
 
-  open Decompress
-
-  let uncompress_string (input_ro:string) : string =
-    let len = String.length input_ro in
-    let inputpos = ref 0 in
-    let input_temp, output_temp = Bytes.(create 0xFFFF, create 0xFFFF) in
+  let uncompress_string (in_str:string) : string =
+    let len = String.length in_str in
+    let in_pos = ref 0 in
+    let window = De.make_window ~bits:32768 in
+    let buf_len = 0xffff in
+    let in_buf, out_buf = Bigstringaf.(create buf_len, create buf_len) in
     let final_output = Buffer.create (len / 3) in (* approx avg rate *)
 
-    let refill (strbuf:Bytes.t) : int =
-      let remaining = len - !inputpos in
-      let tocopy = min 0xFFFF remaining in
-      Bytes.blit_string input_ro !inputpos strbuf 0 tocopy;
-      inputpos := !inputpos + tocopy;
-      tocopy
+    let refill bigstr : int =
+      let remaining = len - !in_pos in
+      let to_copy = min buf_len remaining in
+      Bigstringaf.blit_from_string in_str
+        ~src_off:!in_pos bigstr ~dst_off:0 ~len:to_copy;
+      in_pos := !in_pos + to_copy;
+      to_copy
     in
 
-    let flush strbuf len =
-      Buffer.add_subbytes final_output strbuf 0 len ;
-      0xFFFF
+    let flush bigstr f_len =
+      let str = Bigstringaf.substring bigstr ~off:0 ~len:f_len in
+      Buffer.add_string final_output str
     in
 
-    let window = Window.create ~witness:B.Bytes in
+    De.Higher.uncompress ~w:window ~i:in_buf
+      ~o:out_buf ~refill ~flush;
 
-    begin match
-        Zlib_inflate.bytes input_temp output_temp
-          refill flush Zlib_inflate.(default ~witness:B.bytes window) with
-    | Error _ ->
-      let msg = Printf.sprintf "Decompress.Inflate.bytes failed ..." in
-      raise (PNG_Zlib_error msg);
-    | Ok _ -> Buffer.contents final_output
-    end
+    Buffer.contents final_output
 
-  let compress_string (inputstr:string) : string =
-    let len = String.length inputstr in
-    let inputpos = ref 0 in
-    let input_temp, output_temp = Bytes.(create 0xFFFF , create 0xFFFF) in
+  let compress_string (in_str:string) : string =
+
+    let len = String.length in_str in
+    let in_pos = ref 0 in
+    let window = De.make_window ~bits:32768 in
+    let buf_len = 0xffff in
+    let queue = De.Queue.create buf_len in
+    let in_buf, out_buf = Bigstringaf.(create buf_len , create buf_len) in
     let final_output = Buffer.create (len * 3) in (* approx avg rate *)
-
-    let refill strbuf _max : int =
-      let max = match _max with None -> 0xFFFF | Some m -> m in
-      let remaining = len - !inputpos in
-      let tocopy = min max remaining in
-      Bytes.blit_string inputstr !inputpos strbuf 0 tocopy;
-      inputpos := !inputpos + tocopy;
-      tocopy
+  
+    let refill bigstr : int =
+      let remaining = len - !in_pos in
+      let to_copy = min buf_len remaining in
+      Bigstringaf.blit_from_string in_str
+        ~src_off:!in_pos bigstr ~dst_off:0 ~len:to_copy;
+      in_pos := !in_pos + to_copy;
+      to_copy
     in
 
-    let flush strbuf f_len =
-      Buffer.add_subbytes final_output strbuf 0 f_len ; 0xFFFF
+    let flush bigstr f_len =
+      let str = Bigstringaf.substring bigstr ~off:0 ~len:f_len in
+      Buffer.add_string final_output str
     in
 
-    (* Computations<->size trade-off (see Decompress.Deflate.default): *)
-    let compression_level = 4 in
+    De.Higher.compress (*~level:4*) ~w:window ~q:queue
+      ~i:in_buf ~o:out_buf ~refill ~flush;
 
-    let window = Zlib_deflate.default ~witness:B.Bytes compression_level in
-
-    begin match Zlib_deflate.bytes input_temp output_temp
-                  refill flush window with
-    | Error _ ->
-      let msg = Printf.sprintf "Decompress.Deflate.bytes failed ..." in
-      raise (PNG_Zlib_error msg)
-    | Ok _ -> Buffer.contents final_output
-    end
+    Buffer.contents final_output
 
 end
 
