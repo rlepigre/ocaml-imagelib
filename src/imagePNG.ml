@@ -45,8 +45,18 @@ type pixel =
  * Zlib compression functions relying on decompress
 
  ****************************************************************************)
-module PNG_Zlib = struct
+module PNG_Zlib : sig
   exception PNG_Zlib_error of string
+  val uncompress_string : string -> string
+  val compress_string : string -> string
+end = struct
+  exception PNG_Zlib_error of string
+
+  (* account for extremely meaningful name changes upstream *)
+  module Decompress = De
+  module Zlib = Zl
+  module Zlib_inflate = Zlib.Inf
+  module Zlib_deflate = Zlib.Def
 
   let blit_from_string src src_off dst dst_off len =
     let open Bigarray.Array1 in

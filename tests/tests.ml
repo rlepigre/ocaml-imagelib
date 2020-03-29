@@ -41,7 +41,7 @@ module ImageLib_tests = struct
   let fuzzing : unit Alcotest.test_case list =
     [ ("open PNG file", `Slow, crowbar_png_parsefile) ]
 
-  
+
 end
 
 module ImageLib_PNG_tests = struct
@@ -59,11 +59,10 @@ module ImageLib_PNG_tests = struct
 end
 
 let tests : unit Alcotest.test list =
-  [ 
+  [
     ("unit tests", ImageLib_PNG_tests.unit_tests);
     ("fuzzing", ImageLib_tests.fuzzing);
     ("regressions", ImageLib_PNG_tests.regressions);
-    
    ]
 
 let () =
