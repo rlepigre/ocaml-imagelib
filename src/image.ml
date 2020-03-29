@@ -57,6 +57,38 @@ module Pixmap =
         let w,h = Array2.dim1 p, Array2.dim2 p in
         let fresh = Array2.create int16_unsigned c_layout w h in
         Array2.blit p fresh ; Pix16 fresh
+
+    let compare p1 p2 =
+      let compare_pixels
+          (type a1) (type a2) (* need this to be polymorphic re: elt*)
+        (p1:(int,a1,c_layout) Array2.t)
+        (p2:(int,a2,c_layout) Array2.t) =
+        let d1 = Stdlib.compare (Array2.dim1 p1) (Array2.dim1 p2) in
+        let d2 = Stdlib.compare (Array2.dim2 p1) (Array2.dim2 p2) in
+        match d1, d2 with
+        | 0, 0 -> (* everything matches, we need to look at pixels :-( *)
+          let exception Found of int in
+          begin try
+            for x = 0 to (Array2.dim1 p1) -1 do
+              for y = 0 to (Array2.dim2 p1) -1 do
+                let diff = (Stdlib.compare:int->int->int)
+                    (Array2.get p1 x y) (Array2.get p2 x y) in
+                if diff <> 0 then
+                  raise_notrace (Found diff)
+              done
+            done ;
+            (* pixels are all the same: *)
+            0
+          with Found diff -> diff end
+        | d, 0
+        | 0, d -> d
+        | d, _ -> d
+      in
+      match p1, p2 with
+      | Pix8 _, Pix16 _ -> -2
+      | Pix16 _, Pix8 _ -> 1
+      | Pix8 p1, Pix8 p2 -> compare_pixels p1 p2
+      | Pix16 p1, Pix16 p2 -> compare_pixels p1 p2
   end
 
 type pixmap =
@@ -325,6 +357,53 @@ let copy i = let open Pixmap in
        | GreyA (ii,aa) -> GreyA (copy ii, copy aa)
        | RGB (rr,gg,bb)-> RGB (copy rr, copy gg, copy bb)
        | RGBA (rr,gg,bb,aa) -> RGBA (copy rr, copy gg, copy bb, copy aa) }
+
+let compare_pixmap p1 p2 =
+  match p1, p2 with
+  | Grey g1 , Grey g2 -> Pixmap.compare g1 g2
+  | GreyA (g1, a1), GreyA (g2,a2) ->
+    let diff = Pixmap.compare g1 g2 in
+    if diff <> 0 then diff else Pixmap.compare a1 a2
+  | RGB (r1,g1,b1), RGB (r2,g2,b2) ->
+    let rdiff = Pixmap.compare r1 r2 in
+    if rdiff <> 0 then rdiff
+    else let gdiff = Pixmap.compare g1 g2 in
+      if gdiff <> 0 then gdiff else
+        Pixmap.compare b1 b2
+  | RGBA (r1,g1,b1,a1), RGBA (r2,g2,b2,a2) ->
+    let rdiff = Pixmap.compare r1 r2 in
+    if rdiff <> 0 then rdiff
+    else let gdiff = Pixmap.compare g1 g2 in
+      if gdiff <> 0 then gdiff else
+        let bdiff = Pixmap.compare b1 b2 in
+        if bdiff <> 0 then bdiff else
+          Pixmap.compare a1 a2
+  (* smaller than: *)
+  | Grey _, (GreyA _ | RGB _ | RGBA _) -> -2
+  | GreyA _, (RGB _ | RGBA _) -> -2
+  | RGB _ , RGBA _ -> -2
+  (* larger than: *)
+  | GreyA _, Grey _ -> 3
+  | RGB _, (GreyA _ | Grey _) -> 3
+  | RGBA _, (RGB _ | GreyA _ | Grey _) -> 3
+
+let compare_image
+    {width ; height ; max_val ; pixels}
+    {width = width2; height = height2 ; max_val = max_val2 ; pixels = pixels2}
+  : int=
+  match Stdlib.compare width width2,
+        Stdlib.compare height height2,
+        Stdlib.compare max_val max_val2 with
+  | 0, 0, 0 -> compare_pixmap pixels pixels2
+  (* match when two are zero and third is not: *)
+  | 0, 0, diff -> diff (* differs on one value *)
+  (* match when second is non-zero: *)
+  | 0, 0, _ -> .
+  | 0, d, _ -> d
+  (* match when first is non-zero: *)
+  | 0, _, _ -> .
+  | d, _, _ -> d
+
 
 module Resize : sig
   val scale_copy_layer : image -> src:image -> float (*gamma*) -> image

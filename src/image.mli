@@ -39,6 +39,8 @@ module Pixmap :
     (** [copy t] is a copy of [t] using a new memory allocation.
         This is useful when code out of your control may hold references to a
         pixmap, since pixmaps are mutable.*)
+
+    val compare : t -> t -> int
   end
 
 type pixmap =
@@ -83,6 +85,8 @@ val fill_alpha : image -> int -> unit
 val copy : image -> image
 (** [copy image] is a copy of [image] backed my a new memory allocation,
     so that the mutations of either copy are independent of each other*)
+
+val compare_image : image -> image -> int
 
 exception Corrupted_image of string
 
