@@ -156,10 +156,21 @@ let read_rgb i x y fn =
   match i.pixels with
   | RGB(r,g,b)
   | RGBA(r,g,b,_) ->
+    (try
       let r = Pixmap.get r x y in
       let g = Pixmap.get g x y in
       let b = Pixmap.get b x y in
       fn r g b
+    with Invalid_argument _ ->
+      Printf.eprintf "x:%d y:%d\n%d : %d\n%d : %d\n%d %d" x y
+        (match r with Pix8 r -> Bigarray.Array2.dim1 r | _ -> 0)
+        (match r with Pix8 r -> Bigarray.Array2.dim1 r | _ -> 0)
+        (match g with Pix8 g -> Bigarray.Array2.dim1 g | _ -> 0)
+        (match g with Pix8 g -> Bigarray.Array2.dim1 g | _ -> 0)
+        (match b with Pix8 b -> Bigarray.Array2.dim1 b | _ -> 0)
+        (match b with Pix8 b -> Bigarray.Array2.dim1 b | _ -> 0)
+      ;
+      failwith "XXX")
   | Grey(g)
   | GreyA(g,_)    ->
       let gr = Pixmap.get g x y in
@@ -315,8 +326,14 @@ let copy i = let open Pixmap in
        | RGB (rr,gg,bb)-> RGB (copy rr, copy gg, copy bb)
        | RGBA (rr,gg,bb,aa) -> RGBA (copy rr, copy gg, copy bb, copy aa) }
 
-module Resize = struct
-  let s2rgba gamma (s:int array) =
+module Resize : sig
+  val scale_copy_layer : image -> src:image -> float (*gamma*) -> image
+end = struct
+  (* stolen from the gimp-image-scaler plugin
+     https://blog.hartwork.org/?p=1173
+     https://github.com/hartwork/gimp-image-scaler-plugin/blob/master/imagescaler/algorithms/cubic_gimp.py
+*)
+  let [@inline] s2rgba gamma (s:int array) =
     let max_val = 255 in (* TODO *)
     let max_valf = 255. in (* TODO *)
     let exp2linear pixel gamma =
@@ -327,25 +344,26 @@ module Resize = struct
       | _whatever -> raise (Invalid_argument "TODO")
     in Array.map (fun c -> exp2linear c gamma) num
 
-  let clamp v _min _max =
+  let [@inline] clamp v _min _max =
     max _min (min v _max)
 
 
-  let get_rgba o_x o_y gamma (image:image) : float array =
-    let x = clamp o_x 0 (image.width -1) in
-    let y = clamp o_y 0 (image.width -1) in
-    (*Printf.printf "image.width:%d x:%d[%d] y:%x[%d]\n" image.width
-      x o_x
-      y o_y;*)
-    let colors = read_rgb image x y (fun r g b -> [| r;g;b |]) in
+  let [@inline] get_rgba o_x o_y gamma (image:image) : float array =
+    let x = clamp o_x 1 (image.width -1) in
+    let y = clamp o_y 1 (image.width -1) in
+    let colors = try read_rgb image x y (fun r g b -> [| r;g;b |]) with
+      | Invalid_argument _ ->
+        Printf.eprintf "x:%d[%d] y:%d[%d]" x y image.width image.height ;
+        failwith ("read_rgb failed: " ^ __LOC__)
+    in
     s2rgba gamma colors
 
-  let weighted_sum dx dy s00 s10 s01 s11 =
-    (* 0..1 *)
+  let [@inline] weighted_sum dx dy s00 s10 s01 s11 =
+    (* 0..1 float *)
     ((1. -. dy) *. ((1. -. dx) *. s00 +. dx *. s10)
      +. dy *. ((1. -. dx) *. s01 +. dx *. s11))
 
-  let interpolate_bilinear_gimp src_region sx sy xfrac yfrac gamma =
+  let [@inline] interpolate_bilinear_gimp src_region sx sy xfrac yfrac gamma =
     (*Printf.printf "get_rgba sx:%d (sy+1):%d gamma:%f\n" sx(sy+1)gamma;*)
     let p1 = get_rgba  sx       sy      gamma src_region in
     let p2 = get_rgba (sx + 1)  sy      gamma src_region in
@@ -377,6 +395,56 @@ module Resize = struct
 
     pixel
 
+  let cubic_spline_fit dx pt0 pt1 pt2 pt3 =
+    (* well this is some voodo. TODO. *)
+    (((( (-.pt0) +. 3. *. pt1 -. 3. *. pt2 +. pt3 )*. dx +.
+       ( 2. *. pt0 -. 5. *. pt1 +. 4. *. pt2 -. pt3 )
+      ) *. dx +.
+      ( (-.pt0) +. pt2 )
+     ) *. dx
+     +. (pt1 +. pt1)
+    ) /. 2.0
+
+  let interpolate_cubic_gimp src sx sy xfrac yfrac gamma =
+    let rows : float array array = Array.init 4 (fun ry ->
+        (* instead of allocating four arrays of rgba we need to just
+           unroll them into four arrays of 16 pixel values TODO *)
+        let arr = Array.make 16 0. in
+        for rx = 0 to 3 do
+          let rx = rx land 3 (* aka modulo 4 *) in
+          let rgba = get_rgba (sx - 1 + rx) (sy -1 + ry) gamma src in
+          Array.blit rgba 0 arr (rx*4) 4
+        done ; arr
+      ) in
+    let s0, s1, s2, s3 = rows.(0), rows.(1), rows.(2), rows.(3) in
+    let p0 = cubic_spline_fit xfrac s0.(3) s0.(7) s0.(11) s0.(15) in
+    let p1 = cubic_spline_fit xfrac s1.(3) s1.(7) s1.(11) s1.(15) in
+    let p2 = cubic_spline_fit xfrac s2.(3) s2.(7) s2.(11) s2.(15) in
+    let p3 = cubic_spline_fit xfrac s3.(3) s3.(7) s3.(11) s3.(15) in
+
+    let alphasum = cubic_spline_fit yfrac p0 p1 p2 p3 in
+    assert (alphasum > 0.0) ;
+    let pixel = Array.make 4 0.0 in
+    for b = 0 to 2 do
+      let p0 = cubic_spline_fit
+          xfrac (s0.(0 + b)  *. s0.( 3)) (s0.( 4 + b)  *. s0.( 7))
+          (s0.(8 + b)  *. s0.(11))     (s0.(12 + b) *. s0.(15)) in
+      let p1 = cubic_spline_fit xfrac
+          (s1.(0 + b) *. s1.( 3)) (s1.( 4 + b) *. s1.(7))
+          (s1.(8 + b) *. s1.(11)) (s1.(12 + b) *. s1.(15)) in
+      let p2 = cubic_spline_fit
+          xfrac
+          (s2.(0 + b) *. s2.( 3)) (s2.( 4 + b) *. s2.(7))
+          (s2.(8 + b) *. s2.(11)) (s2.(12 + b) *. s2.(15)) in
+      let p3 = cubic_spline_fit xfrac
+          (s3.(0 + b) *. s3.( 3)) (s3.( 4 + b) *. s3.(7))
+          (s3.(8 + b) *. s3.(11)) (s3.(12 + b) *. s3.(15)) in
+      let sum = cubic_spline_fit yfrac p0 p1 p2 p3 /. alphasum in
+      pixel.(b) <- clamp sum 0. 255. ;
+    done ;
+    pixel.(3) <- clamp alphasum 0. 255. ;
+    pixel
+
 
   let linear2exp linear gamma =
     let maxvalf = 255. in (* todo *)
@@ -401,7 +469,9 @@ module Resize = struct
 
 
   let scale_copy_layer (dst:image) ~(src:image) (*interpol*) gamma =
-    let interpol = interpolate_bilinear_gimp in
+    let _ =  interpolate_bilinear_gimp , interpolate_cubic_gimp in
+    let interpol =
+      interpolate_cubic_gimp in
     let scalex = float src.width /. float dst.width in
     let scaley = float src.height /. float dst.height in
 
