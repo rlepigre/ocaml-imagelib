@@ -295,13 +295,13 @@ let colorize_rgba8888_irc ?(background=0xffff00) ?(current=(-1,-1,-1))
     let flags = Char.chr (flags + 0x20) in
     Printf.sprintf "\x04#%c%c%c%c " r g b flags, next
 
-let colorize_rgba8888 ?(background=0xffff00) ?(current=(-1,-1,-1)) r g b alpha =
+let colorize_rgba8888 ?(character="⬛") ?(background=0xffff00) ?(current=(-1,-1,-1)) r g b alpha =
   let next = (rgba8888_to_rgb888 ~background ~alpha r 16),
              (rgba8888_to_rgb888 ~background ~alpha g 8),
              (rgba8888_to_rgb888 ~background ~alpha b 0) in
-  if next = current then "⬛", next else
+  if next = current then character, next else
     let r,g,b = next in
-    Printf.sprintf "\x1b[0m\x1b[48;2;%d;%d;%dm\x1b[38;2;%d;%d;%dm⬛" r g b r g b, next
+    Printf.sprintf "\x1b[0m\x1b[48;2;%d;%d;%dm\x1b[38;2;%d;%d;%dm%s" r g b r g b character, next
 
 (* Colorize a pixel using VT100 rgb888 escape codes *)
 let colorize_rgba8888_pixel ?(background=0xffff00) r g b alpha =

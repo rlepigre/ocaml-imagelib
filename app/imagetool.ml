@@ -2,6 +2,7 @@ type config = {
   input_file : string;
   display_mode: [`IRC | `VT100] option;
   background: int; (* RGB *)
+  character : string option; (* fill character for terminal printing *)
   crop_x : int;
   crop_y : int;
   gamma: float ;
@@ -18,6 +19,8 @@ let arg_parser array : config =
     | "--help"::_ -> config, [| ""; "" |] (* return extra args *)
     | "--background"::bg::tl ->
       erase leftover {config with background = int_of_string bg} tl
+    | "--character"::fill::tl ->
+      erase leftover {config with character = Some fill} tl
     | "--irc"::tl -> set_display_mode `IRC tl
     | "--vt100"::tl -> set_display_mode `VT100 tl
     | "--gamma"::g::tl ->
@@ -55,6 +58,7 @@ let arg_parser array : config =
       (* default configuration *)
       display_mode = Some `VT100 ;
       input_file = "" ;
+      character = None ;
       background = 0;
       gamma = 2.2;
       resize = `Original ;
@@ -75,6 +79,7 @@ let arg_parser array : config =
     Printf.eprintf "(if OUTPUT-FILE is specified)\n" ;
     Printf.eprintf "Options:\n";
     Printf.eprintf "--irc | --vt100   Output to terminal using escape codes\n" ;
+    Printf.eprintf " \\--character     Fill character(s) for text-mode output\n";
     Printf.eprintf
       "--resize          Set output dimensions. Syntax: '80x25' | '10%%'\n";
     Printf.eprintf "  \\--gamma        Adjust/reinterpret gamma\n";
@@ -143,11 +148,11 @@ let () =
     in loop 0. None
   in
   match config with
-  | { display_mode = Some `VT100 ; background ; _ } ->
+  | { display_mode = Some `VT100 ; background ; character ; _ } ->
     (* print to terminal: using 24-bit color escape codes  *)
     foreach_img
       (fun () -> Printf.printf "\x1b[0;0H") (* a bit annoying for debugging *)
-      (ImageUtil.colorize_rgba8888 ~background) ;
+      (ImageUtil.colorize_rgba8888 ?character ~background) ;
     print_string "\x1b[0m"
 
   | { display_mode = Some `IRC ; background ; _ } ->
@@ -168,7 +173,7 @@ let () =
     (* output to filename specified in second argument *)
     if Sys.(file_exists fn)
     then begin
-      Printf.eprintf "Output file already exists" ;
+      Printf.eprintf "Output file already exists\n" ;
       exit 1
     end else begin
       let extension = extension fn in
