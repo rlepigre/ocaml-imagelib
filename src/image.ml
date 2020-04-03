@@ -428,8 +428,8 @@ end = struct
 
 
   let [@inline] get_rgba o_x o_y gamma (image:image) : float array =
-    let x = clamp o_x 1 (image.width -1) in
-    let y = clamp o_y 1 (image.width -1) in
+    let x = clamp o_x 0 (image.width -1) in
+    let y = clamp o_y 0 (image.height -1) in
     let colors = try read_rgb image x y (fun r g b -> [| r;g;b |]) with
       | Invalid_argument _ ->
         Printf.eprintf "x:%d[%d] y:%d[%d]" x y image.width image.height ;
