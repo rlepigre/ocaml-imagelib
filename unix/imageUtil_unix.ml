@@ -89,7 +89,7 @@ let chunk_writer_of_path fn =
     see {!ImageChannels} for more info*)
 
 module Unix_channel
-  : ImageChannels.OUT_CHANNEL with type out_channel = Pervasives.out_channel
+  : ImageChannels.OUT_CHANNEL with type out_channel = Stdlib.out_channel
 = struct
-  include Pervasives
+  include Stdlib
 end

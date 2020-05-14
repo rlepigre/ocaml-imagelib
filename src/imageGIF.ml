@@ -16,7 +16,7 @@
  *
  * Copyright (C) 2014 Rodolphe Lepigre.
  *)
-open Pervasives
+open Stdlib
 open ImageUtil
 open Image
 

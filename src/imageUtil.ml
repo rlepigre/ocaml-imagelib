@@ -39,7 +39,7 @@ let chunk_printf : 'x. chunk_writer ->
   ('x, unit, string, unit) format4 -> 'x = fun och ->
   Printf.kprintf (chunk_write och)
 
-open Pervasives
+open Stdlib
 
 
 (*
