@@ -13,7 +13,13 @@
 *)
 val writefile : string -> Image.image -> unit
 
+
+(** [size fn] reads the image from the file [fn].
+    It returns the pixel dimensions of the image
+    as the tuple [width, heigth].
+*)
 val size : string -> int * int
+
 
 (** [openfile fn] reads the image from the file [fn].
     This function guesses the file format using the extension.

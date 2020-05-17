@@ -6,7 +6,7 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Imabelib is distributed in the hope that it will be useful,
+ * Imagelib is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -19,7 +19,20 @@
 open Image
 open ImageUtil
 
-(* Note: For an easy to use file-based interface, see [imagelib-unix] *)
+(* Note: This module is an interface to the pure OCaml implementations of
+   various image formats.
+
+   For an easy to use file-based interface, see the [imagelib-unix]
+   OPAM package.
+
+   [ImageLib_unix] will fall back to using [imagemagick's convert] utility
+   to accomodate the manipulation of file formats that are not well supported
+   by this library.
+
+   The GIF implementation is still experimental;
+   the [ImageLib_unix] module reverts to [imagemagick] to avoid causing
+   problems stemming from the premature state of the GIF stack.
+ *)
 
 
 (* [size fn] returns a couple [(w,h)] corresponding to the size of the image
@@ -34,8 +47,6 @@ val size : extension:string -> ImageUtil.chunk_reader -> int * int
 (* [openfile fn] reads the image in the file [fn]. This function guesses the
    image format using the extension, and raises [{!Corrupted_image} msg] in
    case of problem.
-   NB: If the file extension is unknown, this will launch "convert" from
-   imagemagick and attempt to convert to PNG before opening.
 *)
 val openfile : extension:string -> ImageUtil.chunk_reader -> Image.image
 
@@ -46,8 +57,6 @@ val openfile_streaming : extension:string -> ImageUtil.chunk_reader ->
 
 (* [writefile extension och img] writes the image [img] to the chunk reader [och]. 
    The desired format is specified via [extension].
-   NB: If the file extension is unknown, this will launch "convert" from
-   imagemagick and attempt to convert from after saving a PNG.
 *)
 val writefile : extension:string ->
   ImageUtil.chunk_writer -> Image.image -> unit
