@@ -72,9 +72,9 @@ end
 
 let tests : unit Alcotest.test list =
   [
-    ("PNG unit tests", ImageLib_PNG_tests.unit_tests);
+    (* "PNG unit tests", ImageLib_PNG_tests.unit_tests); *)
     ("PNG regressions", ImageLib_PNG_tests.regressions);
-    ("fuzzing", ImageLib_tests.fuzzing);
+    (*("fuzzing", ImageLib_tests.fuzzing);*)
    ]
 
 let () =
