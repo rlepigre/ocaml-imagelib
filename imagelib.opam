@@ -37,6 +37,8 @@ depends: [
   "decompress"   { >= "1.1.0" }
   "stdlib-shims"
   "alcotest"     { with-test }
+  "afl-persistent" { with-test }
+  "crowbar" { with-test }
 ]
 
 build: [ [ "dune" "build" "-p" name "-j" jobs ] ]
