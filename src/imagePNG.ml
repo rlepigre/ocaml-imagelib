@@ -48,70 +48,47 @@ type pixel =
 module PNG_Zlib = struct
   exception PNG_Zlib_error of string
 
-  open Decompress
+  let blit_from_string src src_off dst dst_off len =
+    let open Bigarray.Array1 in
+    for i = 0 to len - 1 do
+      set dst (dst_off + i) (String.get src (src_off + i))
+    done
+
 
   let uncompress_string (input_ro:string) : string =
-    let len = String.length input_ro in
-    let inputpos = ref 0 in
-    let input_temp, output_temp = Bytes.(create 0xFFFF, create 0xFFFF) in
-    let final_output = Buffer.create (len / 3) in (* approx avg rate *)
+    let open Bigarray.Array1 in
+    let i = Bigarray.Array1.create Bigarray.char Bigarray.c_layout Zl.io_buffer_size in
+    let o = Bigarray.Array1.create Bigarray.char Bigarray.c_layout Zl.io_buffer_size in
+    let b = Buffer.create 0x1000 in
+    let p = ref 0 in
 
-    let refill (strbuf:Bytes.t) : int =
-      let remaining = len - !inputpos in
-      let tocopy = min 0xFFFF remaining in
-      Bytes.blit_string input_ro !inputpos strbuf 0 tocopy;
-      inputpos := !inputpos + tocopy;
-      tocopy
-    in
+    let refill dst =
+      let len = min (dim dst) (String.length input_ro - !p) in
+      blit_from_string input_ro !p dst 0 len ; len in
+    let flush src len =
+      for i = 0 to len - 1 do Buffer.add_char b (unsafe_get src i) done in
 
-    let flush strbuf len =
-      Buffer.add_subbytes final_output strbuf 0 len ;
-      0xFFFF
-    in
-
-    let window = Window.create ~witness:B.Bytes in
-
-    begin match
-        Zlib_inflate.bytes input_temp output_temp
-          refill flush Zlib_inflate.(default ~witness:B.bytes window) with
-    | Error _ ->
-      let msg = Printf.sprintf "Decompress.Inflate.bytes failed ..." in
-      raise (PNG_Zlib_error msg);
-    | Ok _ -> Buffer.contents final_output
-    end
+    match Zl.Higher.uncompress ~allocate:(fun bits -> De.make_window ~bits) ~i ~o ~refill ~flush with
+    | Ok _metadata -> Buffer.contents b
+    | Error (`Msg err) -> raise (PNG_Zlib_error err)
 
   let compress_string (inputstr:string) : string =
-    let len = String.length inputstr in
-    let inputpos = ref 0 in
-    let input_temp, output_temp = Bytes.(create 0xFFFF , create 0xFFFF) in
-    let final_output = Buffer.create (len * 3) in (* approx avg rate *)
+    let open Bigarray.Array1 in
+    let i = create Bigarray.char Bigarray.c_layout Zl.io_buffer_size in
+    let o = create Bigarray.char Bigarray.c_layout Zl.io_buffer_size in
+    let w = De.make_window ~bits:15 in
+    let q = De.Queue.create 0x1000 in
+    let b = Buffer.create 0x1000 in
+    let p = ref 0 in
 
-    let refill strbuf _max : int =
-      let max = match _max with None -> 0xFFFF | Some m -> m in
-      let remaining = len - !inputpos in
-      let tocopy = min max remaining in
-      Bytes.blit_string inputstr !inputpos strbuf 0 tocopy;
-      inputpos := !inputpos + tocopy;
-      tocopy
-    in
+    let refill dst =
+      let len = min (dim dst) (String.length inputstr - !p) in
+      blit_from_string inputstr !p dst 0 len ; len in
+    let flush src len =
+      for i = 0 to len - 1 do Buffer.add_char b (unsafe_get src i) done in
 
-    let flush strbuf f_len =
-      Buffer.add_subbytes final_output strbuf 0 f_len ; 0xFFFF
-    in
-
-    (* Computations<->size trade-off (see Decompress.Deflate.default): *)
-    let compression_level = 4 in
-
-    let window = Zlib_deflate.default ~witness:B.Bytes compression_level in
-
-    begin match Zlib_deflate.bytes input_temp output_temp
-                  refill flush window with
-    | Error _ ->
-      let msg = Printf.sprintf "Decompress.Deflate.bytes failed ..." in
-      raise (PNG_Zlib_error msg)
-    | Ok _ -> Buffer.contents final_output
-    end
-
+    Zl.Higher.compress ~level:2 ~w ~q ~i ~o ~refill ~flush ;
+    Buffer.contents b
 end
 
 open PNG_Zlib
