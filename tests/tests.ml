@@ -54,20 +54,13 @@ module ImageLib_PNG_tests = struct
     (fun () -> ignore @@ ImageLib.PNG.ReadPNG.size(cr_as "\149\218\249"))
 
   let self_test_1 () =
-    Printf.printf "printfing\n%!";
     let img = Image.create_rgb 3 3 in
-    Printf.printf "CRATED\n%!";
     let enc = ImageLib.PNG.bytes_of_png img in
-    Printf.printf "REACHED %s\n%!" __LOC__ ;
     let dec = ImageLib.PNG.ReadPNG.parsefile
         (ImageUtil.chunk_reader_of_string (Bytes.to_string enc)) in
-    Printf.printf "REACHED %s\n%!" __LOC__ ;
     Alcotest.check Alcotest.int "equality" 0 (Image.compare_image img dec) ;
-    Printf.printf "REACHED %s\n%!" __LOC__ ;
     Image.write_rgb img 0 0 1 0 0 ;
-    Printf.printf "REACHED %s\n%!" __LOC__ ;
     Alcotest.(check int) "compare works 1" 1 (Image.compare_image img dec) ;
-    Printf.printf "REACHED %s\n%!" __LOC__ ;
     Alcotest.(check int) "compare works 2" (-1) (Image.compare_image dec img)
 
   let regressions : unit Alcotest.test_case list = []
