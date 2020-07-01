@@ -83,27 +83,20 @@ end = struct
     let open Bigarray.Array1 in
     let i = create Bigarray.char Bigarray.c_layout Zl.io_buffer_size in
     let o = create Bigarray.char Bigarray.c_layout Zl.io_buffer_size in
-    Printf.printf "created53\n%!";
     let w = De.make_window ~bits:15 in
-    Printf.printf "windowmade502\n%!";
     let q = De.Queue.create 0x1000 in
     let b = Buffer.create 0x1000 in
-    Printf.printf "buffermade\n%!";
     let p = ref 0 in
 
     let refill dst =
-      Printf.printf "refilling\n%!";
       let len = min (dim dst) (String.length inputstr - !p) in
       blit_from_string inputstr !p dst 0 len ;
       p := !p + len ;
       len in
     let flush src len =
-      Printf.printf "flushing\n%!";
       for i = 0 to len - 1 do Buffer.add_char b (unsafe_get src i) done in
 
-    Printf.printf "zl higher\n%!";
     Zl.Higher.compress ~level:2 ~w ~q ~i ~o ~refill ~flush ;
-    Printf.printf "zl compresse\n%!";
     Buffer.contents b
 end
 
