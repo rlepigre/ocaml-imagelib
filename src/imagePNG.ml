@@ -85,18 +85,27 @@ end = struct
     let open Bigarray.Array1 in
     let i = create Bigarray.char Bigarray.c_layout Zl.io_buffer_size in
     let o = create Bigarray.char Bigarray.c_layout Zl.io_buffer_size in
+    Printf.printf "created53\n%!";
     let w = De.make_window ~bits:15 in
+    Printf.printf "windowmade502\n%!";
     let q = De.Queue.create 0x1000 in
     let b = Buffer.create 0x1000 in
+    Printf.printf "buffermade\n%!";
     let p = ref 0 in
 
     let refill dst =
+      Printf.printf "refilling\n%!";
       let len = min (dim dst) (String.length inputstr - !p) in
-      blit_from_string inputstr !p dst 0 len ; len in
+      blit_from_string inputstr !p dst 0 len ;
+      p := !p + len ;
+      len in
     let flush src len =
+      Printf.printf "flushing\n%!";
       for i = 0 to len - 1 do Buffer.add_char b (unsafe_get src i) done in
 
+    Printf.printf "zl higher\n%!";
     Zl.Higher.compress ~level:2 ~w ~q ~i ~o ~refill ~flush ;
+    Printf.printf "zl compresse\n%!";
     Buffer.contents b
 end
 
@@ -1206,7 +1215,9 @@ let output_png img (och:chunk_writer) =
       raise (Corrupted_image "PNG: img.pixels * bd (bitdepth) mismatch")
   );
   let data = Buffer.contents buf in
+  Printf.printf "about to compress\n%!";
   let data = compress_string data in
+  Printf.printf "did do the compress\n%!";
 
   let datalen = String.length data in
   let max_idat_len = 1048576 in (* 2^20 should be enough *)
@@ -1240,6 +1251,7 @@ let bytes_of_png img =
   let approx_size = img.width * img.height in
   let buf = Buffer.create approx_size in
   let och = chunk_writer_of_buffer buf in
+  Printf.printf "made chunk writer\n%!";
   PngWriter.output_png img och;
   close_chunk_writer och;
   (* Do this instead of Buffer.to_bytes to avoid copying
