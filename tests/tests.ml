@@ -13,29 +13,38 @@ module ImageLib_tests = struct
   let chunked_reader_with_png s =
     ImageUtil.chunk_reader_of_string @@ ImagePNG.png_signature ^ s
 
-  let crowbar_gen_cr =
+  let crowbar_gen_cr_png =
     let content = Crowbar.bytes in
     Crowbar.map [content] chunked_reader_with_png
+
+  let crowbar_gen_cr_gif =
+    let content = Crowbar.bytes in
+    Crowbar.map [content] (fun s -> ImageUtil.chunk_reader_of_string ("GIF89a" ^s))
 
   let crowbar_skip_known_errors f =
     (fun cr ->
         try Crowbar.check
         (f cr)
         with End_of_file
-             | Image.Corrupted_image("Invalid PNG header...")
-             | Image.Corrupted_image("Size of chunk greater than OCaml can handle...")
-             | Image.Corrupted_image("Reached end of file while looking for end of chunk")
+           | Image.Corrupted_image("Invalid PNG header...")
+           | Image.Corrupted_image("Size of chunk greater than OCaml can handle...")
+           | Image.Corrupted_image("Reached end of file while looking for end of chunk")
+           | Image.Corrupted_image ("GIF signature expected...")
           -> Crowbar.bad_test ())
 
 
   let crowbar_png_size () =
+    Crowbar.add_test ~name:"ImageLib.GIF.ReadGIF.openfile"
+      [crowbar_gen_cr_gif]
+      (crowbar_skip_known_errors(fun cr -> (ignore @@ ImageLib.GIF.parsefile cr; true)))
+      ;
     Crowbar.add_test ~name:"ImageLib.PNG.ReadPNG.size"
-      [crowbar_gen_cr]
+      [crowbar_gen_cr_png]
       (crowbar_skip_known_errors(fun cr -> (ImageLib.PNG.ReadPNG.size cr <> (0, 0))))
 
   let crowbar_png_parsefile () =
     Crowbar.add_test ~name:"ImageLib.PNG.ReadPNG.openfile"
-      [crowbar_gen_cr]
+      [crowbar_gen_cr_png]
       (crowbar_skip_known_errors(fun cr -> (ignore @@ ImageLib.PNG.ReadPNG.parsefile cr; true)))
 
   let fuzzing : unit Alcotest.test_case list =
