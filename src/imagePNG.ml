@@ -45,11 +45,9 @@ type pixel =
 
  ****************************************************************************)
 module PNG_Zlib : sig
-  exception PNG_Zlib_error of string
   val uncompress_string : string -> string
   val compress_string : string -> string
 end = struct
-  exception PNG_Zlib_error of string
 
   (* account for extremely meaningful name changes upstream *)
   module Decompress = De
@@ -79,7 +77,7 @@ end = struct
 
     match Zl.Higher.uncompress ~allocate:(fun bits -> De.make_window ~bits) ~i ~o ~refill ~flush with
     | Ok _metadata -> Buffer.contents b
-    | Error (`Msg err) -> raise (PNG_Zlib_error err)
+    | Error (`Msg err) -> raise (Corrupted_image ("PNG.Zlib:" ^ err))
 
   let compress_string (inputstr:string) : string =
     let open Bigarray.Array1 in
