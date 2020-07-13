@@ -8,6 +8,9 @@ let warning fn msg =
 
 let convert fn fn' =
   let ret =
+    (* don't accidentally put command-line options here *)
+    assert (String.get fn  0 <> '-');
+    assert (String.get fn' 0 <> '-');
     Unix.create_process "convert" [| "convert"; fn ; fn' |]
       (* "--" ; see:
        https://github.com/rlepigre/ocaml-imagelib/pull/15#discussion_r198867027
@@ -29,7 +32,7 @@ let size fn =
       let fn' = Filename.temp_file "image" ".png" in
       convert fn fn';
       let ich' = ImageUtil_unix.chunk_reader_of_path fn' in
-      let sz = ImagePNG.ReadPNG.size ich' in
+      let sz = ImagePNG.size ich' in
       rm fn'; sz
     end
 
@@ -44,7 +47,7 @@ let openfile fn : image =
     let fn' = Filename.temp_file "image" ".png" in
     convert fn fn';
     let ich' = ImageUtil_unix.chunk_reader_of_path fn' in
-    let img = ImagePNG.ReadPNG.parsefile ich' in
+    let img = ImagePNG.parsefile ich' in
     rm fn'; img
   in
   if extension = "gif" then

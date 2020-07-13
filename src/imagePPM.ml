@@ -304,3 +304,6 @@ let write_ppm (och:ImageUtil.chunk_writer) img mode =
   );
 
   close_chunk_writer och
+
+include ReadPPM
+let write cw img = write_ppm cw img Binary

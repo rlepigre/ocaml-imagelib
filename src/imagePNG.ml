@@ -1206,9 +1206,7 @@ let output_png img (och:chunk_writer) =
       raise (Corrupted_image "PNG: img.pixels * bd (bitdepth) mismatch")
   );
   let data = Buffer.contents buf in
-  Printf.printf "about to compress\n%!";
   let data = compress_string data in
-  Printf.printf "did do the compress\n%!";
 
   let datalen = String.length data in
   let max_idat_len = 1048576 in (* 2^20 should be enough *)
@@ -1242,10 +1240,12 @@ let bytes_of_png img =
   let approx_size = img.width * img.height in
   let buf = Buffer.create approx_size in
   let och = chunk_writer_of_buffer buf in
-  Printf.printf "made chunk writer\n%!";
   PngWriter.output_png img och;
   close_chunk_writer och;
   (* Do this instead of Buffer.to_bytes to avoid copying
      since the underlying string backing the Buffer.to_bytes
      does not escape this scope: *)
   Bytes.unsafe_of_string (Buffer.contents buf)
+
+include ReadPNG
+let write = write_png

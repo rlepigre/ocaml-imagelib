@@ -63,6 +63,9 @@ val writefile : extension:string ->
 
 module PPM :
   sig
+    include WriteImage
+    include ReadImage
+
     module ReadPPM : ReadImage
 
     type ppm_mode = Binary | ASCII
@@ -72,10 +75,15 @@ module PPM :
 
 module PNG :
   sig
+    include WriteImage
+    include ReadImage
+
     module ReadPNG : ReadImage
 
+    [@@ocaml.deprecated]
     val write_png : chunk_writer -> image -> unit
 
+    [@@ocaml.deprecated]
     val bytes_of_png : image -> Bytes.t
   end
 

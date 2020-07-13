@@ -38,14 +38,14 @@ module ImageLib_tests = struct
       [crowbar_gen_cr_gif]
       (crowbar_skip_known_errors(fun cr -> (ignore @@ ImageLib.GIF.parsefile cr; true)))
       ;
-    Crowbar.add_test ~name:"ImageLib.PNG.ReadPNG.size"
+    Crowbar.add_test ~name:"ImageLib.PNG.size"
       [crowbar_gen_cr_png]
-      (crowbar_skip_known_errors(fun cr -> (ImageLib.PNG.ReadPNG.size cr <> (0, 0))))
+      (crowbar_skip_known_errors(fun cr -> (ImageLib.PNG.size cr <> (0, 0))))
 
   let crowbar_png_parsefile () =
-    Crowbar.add_test ~name:"ImageLib.PNG.ReadPNG.openfile"
+    Crowbar.add_test ~name:"ImageLib.PNG.openfile"
       [crowbar_gen_cr_png]
-      (crowbar_skip_known_errors(fun cr -> (ignore @@ ImageLib.PNG.ReadPNG.parsefile cr; true)))
+      (crowbar_skip_known_errors(fun cr -> (ignore @@ ImageLib.PNG.parsefile cr; true)))
 
   let fuzzing : unit Alcotest.test_case list =
     [ "PNG fuzz size", `Slow, crowbar_png_size
@@ -60,12 +60,12 @@ module ImageLib_PNG_tests = struct
   let chunk_reader_of_string_raises _ =
     Alcotest.(check_raises) "when reading outside bounds, End_of_file is raised"
     End_of_file
-    (fun () -> ignore @@ ImageLib.PNG.ReadPNG.size(cr_as "\149\218\249"))
+    (fun () -> ignore @@ ImageLib.PNG.size(cr_as "\149\218\249"))
 
   let self_test_1 () =
     let img = Image.create_rgb 3 3 in
     let enc = ImageLib.PNG.bytes_of_png img in
-    let dec = ImageLib.PNG.ReadPNG.parsefile
+    let dec = ImageLib.PNG.parsefile
         (ImageUtil.chunk_reader_of_string (Bytes.to_string enc)) in
     Alcotest.check Alcotest.int "equality" 0 (Image.compare_image img dec) ;
     Image.write_rgb img 0 0 1 0 0 ;
