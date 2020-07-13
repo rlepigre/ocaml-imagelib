@@ -19,45 +19,32 @@
 
 open Image
 
-open ImagePNG
-open ImagePPM
-open ImageXCF
-open ImageJPG
-open ImageBMP
-
-module PNG = ImagePNG
-module PPM = ImagePPM
-module XCF = ImageXCF
-module JPG = ImageJPG
-module GIF = ImageGIF
-module BMP = ImageBMP
-
 let size ~extension ich =
   let ext = String.lowercase_ascii extension in
-  if List.mem ext ReadPNG.extensions
-  then ReadPNG.size ich else
-  if List.mem ext ReadPPM.extensions
-  then ReadPPM.size ich else
-  if List.mem ext ReadXCF.extensions
-  then ReadXCF.size ich else
-  if List.mem ext ReadJPG.extensions
-  then ReadJPG.size ich else
-  if List.mem ext GIF.extensions
-  then GIF.size ich else
-  if List.mem ext ReadBMP.extensions
-  then ReadBMP.size ich else
+  if List.mem ext ImagePNG.extensions
+  then ImagePNG.size ich else
+  if List.mem ext ImagePPM.extensions
+  then ImagePPM.size ich else
+  if List.mem ext ImageXCF.extensions
+  then ImageXCF.size ich else
+  if List.mem ext ImageJPG.extensions
+  then ImageJPG.size ich else
+  if List.mem ext ImageGIF.extensions
+  then ImageGIF.size ich else
+  if List.mem ext ImageBMP.extensions
+  then ImageBMP.size ich else
     raise (Not_yet_implemented ext)
 
 let openfile ~extension ich : image =
   let ext = String.lowercase_ascii extension in
-  if List.mem ext ReadPNG.extensions
-  then ReadPNG.parsefile ich else
-  if List.mem ext GIF.extensions
-  then GIF.parsefile ich else
-  if List.mem ext ReadPPM.extensions
-  then ReadPPM.parsefile ich else
-  if List.mem ext ReadBMP.extensions
-  then ReadBMP.parsefile ich else
+  if List.mem ext ImagePNG.extensions
+  then ImagePNG.parsefile ich else
+  if List.mem ext ImageGIF.extensions
+  then ImageGIF.parsefile ich else
+  if List.mem ext ImagePPM.extensions
+  then ImagePPM.parsefile ich else
+  if List.mem ext ImageBMP.extensions
+  then ImageBMP.parsefile ich else
     raise (Not_yet_implemented ext)
 
 let openfile_streaming ~extension ich state =
@@ -66,25 +53,32 @@ let openfile_streaming ~extension ich state =
     | image, time, Some v -> image, time, Some (f v) in
   match state with
   | Some (`GIF t) ->
-    if_some (fun v -> `GIF v) (GIF.read_streaming ich (Some t))
+    if_some (fun v -> `GIF v) (ImageGIF.read_streaming ich (Some t))
   | None ->
     let ext = String.lowercase_ascii extension in
-    if List.mem ext ReadPNG.extensions
-    then Some (ReadPNG.parsefile ich), 0, None else
-    if List.mem ext GIF.extensions
-    then if_some (fun v -> `GIF v) (GIF.read_streaming ich None) else
-    if List.mem ext ReadPPM.extensions
-    then Some (ReadPPM.parsefile ich), 0, None else
-    if List.mem ext ReadBMP.extensions
-    then Some (ReadBMP.parsefile ich), 0, None else
+    if List.mem ext ImagePNG.extensions
+    then Some (ImagePNG.parsefile ich), 0, None else
+    if List.mem ext ImageGIF.extensions
+    then if_some (fun v -> `GIF v) (ImageGIF.read_streaming ich None) else
+    if List.mem ext ImagePPM.extensions
+    then Some (ImagePPM.parsefile ich), 0, None else
+    if List.mem ext ImageBMP.extensions
+    then Some (ImageBMP.parsefile ich), 0, None else
       raise (Not_yet_implemented ext)
 
 let writefile ~extension (och:ImageUtil.chunk_writer) i =
   let extension = String.lowercase_ascii extension in
-  if List.mem extension ImagePNG.ReadPNG.extensions
-  then ImagePNG.write_png och i else
-  if List.mem extension GIF.extensions
+  if List.mem extension ImagePNG.extensions
+  then ImagePNG.write och i else
+  if List.mem extension ImageGIF.extensions
   then ImageGIF.write och i else
-  if List.mem extension ImagePPM.ReadPPM.extensions
-  then ImagePPM.write_ppm och i Binary else
+  if List.mem extension ImagePPM.extensions
+  then ImagePPM.write och i else
     raise (Not_yet_implemented extension)
+
+module PNG = ImagePNG
+module PPM = ImagePPM
+module XCF = ImageXCF
+module JPG = ImageJPG
+module BMP = ImageBMP
+module GIF = ImageGIF

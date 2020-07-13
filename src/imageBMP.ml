@@ -560,3 +560,4 @@ module ReadBMP : ReadImage = struct
     | Error (`Bmp_error msg) -> raise (Corrupted_image msg)
     | Ok img -> img
 end
+include ReadBMP
