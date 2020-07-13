@@ -13,6 +13,7 @@ let perform () =
     | _ -> ignore @@ ImageLib.openfile ~extension chunk_reader in
   match f ~extension:(extension Sys.argv.(2)) chunk_reader with
   | _ -> ()
+  | exception Out_of_memory -> ()
   | exception End_of_file -> ()
   | exception Image.Corrupted_image _ -> ()
   | exception Image.Not_yet_implemented _ -> ()

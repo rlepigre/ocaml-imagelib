@@ -26,6 +26,8 @@ module ImageLib_tests = struct
         try Crowbar.check
         (f cr)
         with End_of_file
+           | Out_of_memory
+           | Image.Not_yet_implemented _
            | Image.Corrupted_image("Invalid PNG header...")
            | Image.Corrupted_image("Size of chunk greater than OCaml can handle...")
            | Image.Corrupted_image("Reached end of file while looking for end of chunk")
