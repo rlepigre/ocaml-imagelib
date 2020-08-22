@@ -1,0 +1,8 @@
+*.merlin
+*~
+*#
+.#*
+.*.swp
+_build
+imagelib-unix.install
+imagelib.install

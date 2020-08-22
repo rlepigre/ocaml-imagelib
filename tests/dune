@@ -1,0 +1,24 @@
+(executable
+  ; this is only built if AFL
+  ; is installed:
+  (optional)
+  (name aflrunner)
+  (public_name aflrunner)
+  (package imagelib)
+  (modules aflrunner)
+  (libraries imagelib imagelib-unix afl-persistent)
+)
+
+(test
+  (name tests)
+  (modules tests)
+  (package imagelib-unix)
+  (libraries imagelib imagelib-unix alcotest)
+)
+
+(test
+  (name testwithcrowbar)
+  (modules testwithcrowbar)
+  (package imagelib-unix)
+  (libraries imagelib imagelib-unix alcotest crowbar)
+)

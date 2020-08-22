@@ -52,13 +52,24 @@ module ReadPPM : ReadImage = struct
       pass_comments ();
       Scanf.bscanf scanner "%u%1[\t\n ]" (fun h _ -> height := h)
     end else begin
-      Scanf.bscanf scanner "%u%[\t\n ]" (fun w _ -> width := w);
+      begin try
+        Scanf.bscanf scanner "%u%[\t\n ]" (fun w _ -> width := w);
+      with Stdlib.Scanf.Scan_failure _ ->
+        raise(Image.Corrupted_image "PPM: invalid width")
+      end;
       pass_comments ();
-      Scanf.bscanf scanner "%u%[\t\n ]" (fun h _ -> height := h);
+      begin try
+        Scanf.bscanf scanner "%u%[\t\n ]" (fun h _ -> height := h);
+      with Stdlib.Scanf.Scan_failure _ ->
+        raise(Image.Corrupted_image "PPM: invalid height")
+      end;
       pass_comments ();
-      Scanf.bscanf scanner "%u%1[\t\n ]" (fun mv _ -> max_val := mv)
-    end ;
-
+      begin try
+        Scanf.bscanf scanner "%u%1[\t\n ]" (fun mv _ -> max_val := mv);
+      with Stdlib.Scanf.Scan_failure _ ->
+        raise(Image.Corrupted_image "PPM: invalid max_val")
+      end
+    end;
     !magic,!width,!height,!max_val,scanner
 
   (*
@@ -97,8 +108,12 @@ module ReadPPM : ReadImage = struct
        let image = create_grey ~max_val:max_val w h in
        for y = 0 to h - 1 do
          for x = 0 to w - 1 do
-           Scanf.bscanf scanner "%d%[\t\n ]" (fun v _ ->
-             write_grey image x y v)
+           begin try
+             Scanf.bscanf scanner "%d%[\t\n ]" (fun v _ ->
+               write_grey image x y v)
+           with Stdlib.Scanf.Scan_failure _ ->
+             raise(Image.Corrupted_image "PPM: Invalid grayscale pixel data")
+           end
          done
        done;
        image
@@ -289,3 +304,6 @@ let write_ppm (och:ImageUtil.chunk_writer) img mode =
   );
 
   close_chunk_writer och
+
+include ReadPPM
+let write cw img = write_ppm cw img Binary

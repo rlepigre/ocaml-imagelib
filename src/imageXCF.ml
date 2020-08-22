@@ -72,3 +72,4 @@ module ReadXCF : ReadImage = struct
   let parsefile _ =
     raise (Not_yet_implemented "ImageXCF.openfile") (* TODO  *)
 end
+include ReadXCF

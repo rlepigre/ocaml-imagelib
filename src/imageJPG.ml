@@ -85,3 +85,4 @@ module ReadJPG : ReadImage = struct
   let parsefile _ =
     raise (Not_yet_implemented "ImageJPG.openfile") (* TODO  *)
 end
+include ReadJPG
