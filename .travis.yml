@@ -32,9 +32,9 @@ before_install:
   - eval $(opam env)
 
 script:
-  - opam pin -y imagelib.dev .
-  - opam install -t imagelib
-  - opam pin -y imagelib-unix.dev .
+  - opam pin -n imagelib.dev .
+  - opam pin -n imagelib-unix.dev .
+  - opam install -t .
 
 notifications:
   email:
