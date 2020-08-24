@@ -32,8 +32,8 @@ license: "GPLv3"
 doc: "https://github.com/rlepigre/imagelib"
 
 depends: [
-  "ocaml"        {         >= "4.07.0" }
-  "dune"         { build & >= "2.3.0"  }
+  "ocaml"        { >= "4.07.0" }
+  "dune"         { >= "2.3.0"  }
   "decompress"   { >= "1.2.0" }
   "stdlib-shims"
 ]

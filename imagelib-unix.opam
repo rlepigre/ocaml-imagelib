@@ -26,10 +26,10 @@ license: "GPLv3"
 doc: "https://github.com/rlepigre/imagelib"
 
 depends: [
-  "ocaml"        {         >= "4.07.0" }
-  "dune"         { build & >= "2.3.0"  }
+  "ocaml"        { >= "4.07.0" }
+  "dune"         { >= "2.3.0"  }
   "alcotest"     { with-test }
-  "crowbar" { with-test }
+  "crowbar"      { with-test }
   "imagelib"     { = version }
 ]
 
