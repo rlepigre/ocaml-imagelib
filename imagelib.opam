@@ -29,7 +29,7 @@ authors: [
   "Rodolphe Lepigre <rodolphe.lepigre@inria.fr>"
 ]
 license: "GPLv3"
-doc: "https://rlepigre.github.io/imagelib"
+doc: "https://rlepigre.github.io/ocaml-imagelib"
 
 depends: [
   "ocaml"        { >= "4.07.0" }
