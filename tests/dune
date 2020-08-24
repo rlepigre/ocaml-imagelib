@@ -4,7 +4,7 @@
   (optional)
   (name aflrunner)
   (public_name aflrunner)
-  (package imagelib)
+  (package imagelib-unix)
   (modules aflrunner)
   (libraries imagelib imagelib-unix afl-persistent)
 )

@@ -37,4 +37,4 @@ depopts: [
   "afl-persistent" { with-test }
 ]
 
-build: [ [ "dune" "build" "-p" name "-j" jobs ] ]
+build: [ [ "dune" "build" "-p" name "-j" jobs "@runtest" {with-test} ] ]
