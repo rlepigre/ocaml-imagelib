@@ -32,9 +32,10 @@ before_install:
   - eval $(opam env)
 
 script:
-  - opam pin -n imagelib.dev .
-  - opam pin -n imagelib-unix.dev .
-  - opam install -t .
+  - opam pin -t imagelib.dev .
+  - make test
+  - opam install crowbar afl-persistent
+  - make slowtest
 
 notifications:
   email:

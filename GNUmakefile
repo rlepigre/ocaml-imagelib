@@ -25,7 +25,7 @@ test:
 	@dune runtest -p imagelib
 
 slowtest:
-	@dune build @slowtests -p imagelib
+	@dune build @slowtests -p imagelib --no-buffer
 #.PHONY: release
 #release: distclean
 #	git push origin
