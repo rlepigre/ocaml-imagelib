@@ -23,8 +23,6 @@
 
 (rule
  (alias slowtests)
- (targets testwithcrowbar aflrunner)
+ (targets testwithcrowbar)
  (action
-  (progn
-   (run %{exe:testwithcrowbar.exe})
-   (run %{exe:aflrunner.exe}))))
+   (run %{exe:testwithcrowbar.exe})))
