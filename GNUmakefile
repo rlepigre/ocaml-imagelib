@@ -1,11 +1,11 @@
-VERSION := 20180522
+VERSION := 20200829
 
 .PHONY: all
 all: bin
 
 .PHONY: bin
 bin:
-	@dune build
+	@dune build -p imagelib
 
 install: bin
 	@dune install
@@ -20,6 +20,12 @@ clean:
 distclean: clean
 	@find . -name "*~" -exec rm {} \;
 
+.PHONY: test slowtest
+test:
+	@dune runtest -p imagelib
+
+slowtest:
+	@dune build @slowtests -p imagelib
 #.PHONY: release
 #release: distclean
 #	git push origin

@@ -2,7 +2,5 @@
  (name imagelib)
  (public_name imagelib)
  (synopsis "Image library")
- (modules :standard)
- (flags (:standard -safe-string))
  (wrapped false)
  (libraries stdlib-shims bigarray checkseum.ocaml decompress.zl))

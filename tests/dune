@@ -1,24 +1,30 @@
 (executable
-  ; this is only built if AFL
-  ; is installed:
-  (optional)
-  (name aflrunner)
-  (public_name aflrunner)
-  (package imagelib-unix)
-  (modules aflrunner)
-  (libraries imagelib imagelib-unix afl-persistent)
-)
+ ; this is only built if AFL
+ ; is installed:
+ (optional)
+ (name aflrunner)
+ (public_name aflrunner)
+ (modules aflrunner)
+ (libraries imagelib imagelib.unix afl-persistent))
+
+(executable
+ ; this is only built if crowbar
+ ; is installed:
+ (optional)
+ (name testwithcrowbar)
+ (public_name testwithcrowbar)
+ (modules testwithcrowbar)
+ (libraries imagelib imagelib.unix alcotest crowbar))
 
 (test
-  (name tests)
-  (modules tests)
-  (package imagelib-unix)
-  (libraries imagelib imagelib-unix alcotest)
-)
+ (name tests)
+ (modules tests)
+ (libraries imagelib imagelib.unix alcotest))
 
-(test
-  (name testwithcrowbar)
-  (modules testwithcrowbar)
-  (package imagelib-unix)
-  (libraries imagelib imagelib-unix alcotest crowbar)
-)
+(rule
+ (alias slowtests)
+ (targets testwithcrowbar aflrunner)
+ (action
+  (progn
+   (run %{exe:testwithcrowbar.exe})
+   (run %{exe:aflrunner.exe}))))

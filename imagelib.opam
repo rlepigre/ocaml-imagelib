@@ -33,10 +33,18 @@ doc: "https://rlepigre.github.io/ocaml-imagelib"
 
 depends: [
   "ocaml"        { >= "4.07.0" }
+  "base-unix"
   "dune"         { >= "2.3.0"  }
   "decompress"   { >= "1.2.0" }
   "stdlib-shims"
+  "alcotest"     { with-test }
 ]
 
+depopts: [
+  "crowbar"        { with-test }
+  "afl-persistent" { with-test }
+]
 
-build: [ [ "dune" "build" "-p" name "-j" jobs "@runtest" {with-test} ] ]
+build: [
+  [ "dune" "build" "-p" name "-j" jobs "@runtest" {with-test} ]
+]
