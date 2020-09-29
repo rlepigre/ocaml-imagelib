@@ -34,8 +34,6 @@ before_install:
 script:
   - opam pin -t imagelib.dev .
   - make test
-  - opam install crowbar afl-persistent
-  - make slowtest
 
 notifications:
   email:
