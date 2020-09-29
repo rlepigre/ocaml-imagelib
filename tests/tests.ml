@@ -16,6 +16,7 @@ module ImageLib_PNG_tests = struct
 
   let self_test_1 () =
     let img = Image.create_rgb 3 3 in
+    Image.fill_rgb img 0 0 0;
     let enc = ImageLib.PNG.bytes_of_png img in
     let dec = ImageLib.PNG.parsefile
         (ImageUtil.chunk_reader_of_string (Bytes.to_string enc)) in
