@@ -28,7 +28,7 @@ List of dependencies:
 
 Additional packages:
  - ImageMagick (convert) for handling some formats.
- - Crowbar, Alcotest (for the test suite)
+ - Crowbar, Alcotest, afl-persistent (for the test suite)
 
 Installation
 ------------
@@ -46,14 +46,14 @@ Fuzzing
 
 This section is primarily of use for developers of the library.
 
+To exectute `crowbar` tests, it is enough to run `make slowtest`.
+
 The `aflrunner.exe` target can be used to fuzz test the image parsers with [AFL](http://lcamtuf.coredump.cx/afl).
-- It will only be built if the `afl-persistent` OPAM package is installed.
-- The parser is selected using the filename extension.
+The parser is selected using the filename extension.
 
 Here is an example, requiring at least one valid BMP file in a folder called `sample-bmps/`:
 ```shell
-imagelib $ opam install -y afl-persistent
-imagelib $ dune build
+imagelib $ dune build tests/aflrunner.exe
 imagelib $ afl-fuzz \
   -i sample-bmps/ \
   -o bmp-results/ \
