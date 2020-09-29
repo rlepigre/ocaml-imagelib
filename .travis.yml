@@ -15,7 +15,7 @@ env:
   - OCAML_VERSION=4.08.1
   - OCAML_VERSION=4.09.1
   - OCAML_VERSION=4.10.1
-  - OCAML_VERSION=4.11.0
+  - OCAML_VERSION=4.11.1
 
 os:
   - linux
@@ -32,9 +32,8 @@ before_install:
   - eval $(opam env)
 
 script:
-  - opam pin -n imagelib.dev .
-  - opam pin -n imagelib-unix.dev .
-  - opam install -t .
+  - opam pin -t imagelib.dev .
+  - make test
 
 notifications:
   email:
