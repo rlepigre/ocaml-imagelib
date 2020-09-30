@@ -46,5 +46,6 @@ depopts: [
 ]
 
 build: [
-  [ "dune" "build" "-p" name "-j" jobs "@runtest" {with-test} ]
-]
+  [ "dune" "build" "-p" name "-j" jobs
+      "@install"
+      "@runtest" {with-test}"@runtest" {with-test} ]
