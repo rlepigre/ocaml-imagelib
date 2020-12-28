@@ -1,4 +1,11 @@
 (executable
  (name imagetool)
  (public_name imagetool)
+ (modules imagetool)
+ (libraries imagelib imagelib.unix))
+
+(executable
+ (name convert)
+ (public_name imagelib-convert)
+ (modules convert)
  (libraries imagelib imagelib.unix))

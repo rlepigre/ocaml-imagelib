@@ -6,3 +6,4 @@
 _build
 imagelib-unix.install
 imagelib.install
+_opam
