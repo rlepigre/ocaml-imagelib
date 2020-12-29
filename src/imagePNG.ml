@@ -19,7 +19,7 @@
 open ImageUtil
 open Image
 
-let debug = ref false
+let debug = ref true
 
 let png_signature = "\137PNG\013\010\026\010"
 
@@ -559,6 +559,12 @@ module ReadPNG : ReadImage = struct
     let aspect_ratio = ref None in
     let pixel_size = ref None in
 
+    (* Alpha values specified by tRNS chunk (simple transparency). *)
+    let palette_alpha = ref [||] in
+    (* TODO check that the values are not corrupted. *)
+    let grey_level_alpha : int option ref = ref None in
+    let true_color_alpha : pixel option ref = ref None in
+
     begin
       try while !curr_chunk.chunk_type <> "IEND" do
         let curr_ctype = !curr_chunk.chunk_type in
@@ -699,9 +705,49 @@ module ReadPNG : ReadImage = struct
           | "tRNS" ->
               only_once curr_ctype;
               only_before curr_ctype "IDAT";
-              (* TODO *)
-              if !debug then begin
-                Printf.fprintf stderr "tRNS chunk ignored\n%!"
+
+              let data = !curr_chunk.chunk_data in
+              let data_len = String.length data in
+              begin
+                match !ihdr.colour_type with
+                | 0 ->
+                    if data_len <> 2 then begin
+                      Printf.eprintf "Corrupted tRNS chunk (ignored).\n%!"
+                    end else begin
+                      let alpha = int_of_str2_le data in
+                      grey_level_alpha := Some(alpha);
+                      if !debug then
+                        Printf.eprintf "tRNS with alpha value %i.\n%!" alpha
+                    end
+                | 2 ->
+                    if data_len <> 6 then begin
+                      Printf.eprintf "Corrupted tRNS chunk (ignored).\n%!"
+                    end else begin
+                      let r = int_of_str2_le (String.sub data 0 2) in
+                      let g = int_of_str2_le (String.sub data 2 2) in
+                      let b = int_of_str2_le (String.sub data 4 2) in
+                      true_color_alpha := Some({r; g; b});
+                      if !debug then
+                        Printf.eprintf "tRNS with alpha value (%i,%i,%i).\n%!"
+                          r g b
+                    end
+                | 3 ->
+                    if data_len > Array.length !palette then begin
+                      Printf.eprintf "Corrupted tRNS chunk (ignored).\n%!"
+                    end else begin
+                      let init i = int_of_char data.[i] in
+                      palette_alpha := Array.init data_len init;
+                      if !debug then begin
+                        Printf.eprintf "tRNS with alpha values for palette:";
+                        Array.iter (Printf.eprintf " %i") !palette_alpha;
+                        Printf.eprintf ".\n%!"
+                      end
+                    end
+                | c ->
+                    if !debug then begin
+                      Printf.eprintf "tRNS chunk is prohibited for ";
+                      Printf.eprintf "color type %i (ignored).\n%!" c
+                    end
               end
           | "pHYs" ->
               only_once curr_ctype;
@@ -827,14 +873,16 @@ module ReadPNG : ReadImage = struct
       raise (Corrupted_image "One or more dimensions are negative");
 
     (* Computing number of component and byte per pixel *)
-    let nb_comp = match ct with
-                   | 0 -> 1 | 2 -> 3 | 3 -> 1 | 4 -> 2 | 6 -> 4
-                   | _ -> -1
+    let nb_comp =
+      match ct with
+      | 0 -> 1 | 2 -> 3 | 3 -> 1 | 4 -> 2 | 6 -> 4
+      | _ -> assert false
     in
-    let bpp = match bd with
-               | 8  -> nb_comp
-               | 16 -> 2 * nb_comp
-               | _  -> 1
+    let bpp =
+      match bd with
+      | 8  -> nb_comp
+      | 16 -> 2 * nb_comp
+      | _  -> 1
     in
 
     let unfiltered =
@@ -905,28 +953,51 @@ module ReadPNG : ReadImage = struct
     if !debug then Printf.fprintf stderr "Building image structure...\n%!";
     match ct with
     | 0 ->
-      let image = create_grey ~max_val:(ones bd) w h in
+      let (alpha, alpha_val) =
+        match !grey_level_alpha with
+        | Some(alpha) -> (true , alpha)
+        | None        -> (false, -1   ) (* Cannot occur. *)
+      in
+      let max_val = ones bd in
+      let image = create_grey ~alpha ~max_val w h in
       for y = 0 to h - 1 do
         for x = 0 to w - 1 do
-          write_grey image x y unfiltered_int.(y).(x)
+          let g = unfiltered_int.(y).(x) in
+          if alpha then
+            let alpha = if g = alpha_val then 0 else max_val in
+            write_greya image x y g alpha
+          else
+            write_grey image x y g
         done
       done;
       image
 
-     | 2 ->
-       let image = create_rgb ~max_val:(ones bd) w h in
-       for y = 0 to h - 1 do
-         for x = 0 to w - 1 do
-           let r = unfiltered_int.(y).(3 * x) in
-           let g = unfiltered_int.(y).(3 * x + 1) in
-           let b = unfiltered_int.(y).(3 * x + 2) in
-           write_rgb image x y r g b
-         done
-       done;
-       image
+    | 2 ->
+      let (alpha, alpha_val) =
+        match !true_color_alpha with
+        | Some(alpha) -> (true , alpha)
+        | None        -> (false, {r = -1; g = -1; b = -1}) (* Cannot occur. *)
+      in
+      let max_val = ones bd in
+      let image = create_rgb ~alpha ~max_val w h in
+      for y = 0 to h - 1 do
+        for x = 0 to w - 1 do
+          let r = unfiltered_int.(y).(3 * x) in
+          let g = unfiltered_int.(y).(3 * x + 1) in
+          let b = unfiltered_int.(y).(3 * x + 2) in
+          if alpha then
+            let alpha = if {r; g; b} = alpha_val then 0 else max_val in
+            write_rgba image x y r g b alpha
+          else
+            write_rgb image x y r g b
+        done
+      done;
+      image
 
      | 3 ->
-       let image = create_rgb ~max_val:255 w h in
+       (* Check for alpha channel specified by a tRNS chunk. *)
+       let alpha = Array.length !palette_alpha <> 0 in
+       let image = create_rgb ~alpha ~max_val:255 w h in
        for y = 0 to h - 1 do
          for x = 0 to w - 1 do
            let index = unfiltered_int.(y).(x) in
@@ -936,7 +1007,14 @@ module ReadPNG : ReadImage = struct
              else index
            in
            let p = !palette.(index) in
-           write_rgb image x y p.r p.g p.b
+           if alpha then
+             let alpha =
+               try !palette_alpha.(index) with
+               | Invalid_argument _ -> 255
+             in
+             write_rgba image x y p.r p.g p.b alpha
+           else
+             write_rgb image x y p.r p.g p.b
          done
        done;
        image
