@@ -626,7 +626,6 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
                  | Some gct ->
                    fill_background_color gif_state.buffer
                      gct gif_state.header.bg_color_index) ;
-                (*Image.fill_alpha gif_state.buffer 0xFF*)
 
               | 4 -> (* overwrite graphic with previous graphic*)
                 Image.fill_alpha gif_state.buffer 0xFF
@@ -730,12 +729,13 @@ The thing to remember about Restore to Previous is that it's not necessarily the
             if y+top < 0 || y+top >= buffer.height then () else
             Image.read_rgba image x y
               (fun r g b -> function
+                 (* optimization: if the dot is invisible, only copy over the alpha value: y*)
                  | 0x00 -> begin match gif_state.buffer.pixels with
-                     | RGBA (_,_,_,aa) -> Pixmap.set aa (left+x) (top+y) 0xff
+                     | RGBA (_,_,_,aa) -> Pixmap.set aa (left+x) (top+y) 0x00
                      | _ -> failwith "gif_state.buffer.pixels is not rgba"
                    end
-                 | _ ->
-                   Image.write_rgb gif_state.buffer (left+x) (top+y) r g b)
+                 | a ->
+                   Image.write_rgba gif_state.buffer (left+x) (top+y) r g b a)
           done
         done ;
         Some gif_state.buffer, gif_state.display_time, Some gif_state

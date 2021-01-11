@@ -119,7 +119,7 @@ let () =
   let handle_resize input_img =
     let doit x y =
       let x, y = max 1 x, max 1 y in
-      let dst = Image.create_rgb ~alpha:false x y in
+      let dst = Image.create_rgb ~alpha:true x y in
       Image.Resize.scale_copy_layer dst ~src:input_img config.gamma
     in
     match config.resize with
