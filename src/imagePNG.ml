@@ -19,7 +19,7 @@
 open ImageUtil
 open Image
 
-let debug = ref true
+let debug = ref false
 
 let png_signature = "\137PNG\013\010\026\010"
 
