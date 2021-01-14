@@ -191,6 +191,9 @@ let () =
   in
   match config with
   | { display_mode = Some `VT100 ; background ; character ; frames ; _ } ->
+    (* TODO: only the first frame should paint the alpha color; after that
+       we should use the background color when the image is emitting alpha
+       updates *)
     (* print to terminal: using 24-bit color escape codes  *)
     foreach_img ~frames
       (fun () -> Printf.printf "\x1b[0;0H") (* a bit annoying for debugging *)
