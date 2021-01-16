@@ -1,3 +1,8 @@
+## ocaml-imagelib_20210116
+
+- Fix alpha handling for GIF and resizing
+- Add transparency support to PNG
+
 ## ocaml-imagelib_20200929
 
 - Port to dune 2.0
