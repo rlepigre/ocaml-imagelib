@@ -546,7 +546,7 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
 
               (* initialize with bgcolor if there's a global color table: *)
               fill_background_color buffer gct header.bg_color_index ;
-              fill_alpha buffer 0xff;
+              (*fill_alpha buffer 0xff;*)
 
               Some gct
           in
@@ -606,12 +606,13 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
             (* http://webreference.com/content/studio/disposal.html *)
             let graphics_disposal_method = match (packed lsr 2) land 0b111 with
               | 0 ->
-                Printf.printf "graphic disposal method not specified\n%!"
+                ()
+                (*Printf.eprintf "graphic disposal method not specified\n%!"*)
               (* Use this option to replace one full-size, non-transparent frame with another. *)
               (* TODO *)
 
               | 1 -> (* do not dispose of graphic*)
-                (*Printf.printf "DO NOT DISPOSE\n%!";*)
+                (*Printf.eprintf "DO NOT DISPOSE\n%!";*)
                 fill_alpha gif_state.buffer 0xff;
               (*  In this option, any pixels not covered up by the next frame continue to display. This is the setting used most often for optimized animations. In the flashing light animation, we wanted to keep the first frame displaying, so the subsequent optimized frames would just replace the part that we wanted to change. That's what Do Not Dispose does. *)
                 ()
@@ -626,7 +627,6 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
                  | Some gct ->
                    fill_background_color gif_state.buffer
                      gct gif_state.header.bg_color_index) ;
-                (*Image.fill_alpha gif_state.buffer 0xFF*)
 
               | 4 -> (* overwrite graphic with previous graphic*)
                 Image.fill_alpha gif_state.buffer 0xFF
@@ -730,12 +730,14 @@ The thing to remember about Restore to Previous is that it's not necessarily the
             if y+top < 0 || y+top >= buffer.height then () else
             Image.read_rgba image x y
               (fun r g b -> function
+                 (* optimization: if the dot is invisible, only copy over the alpha value: y*)
                  | 0x00 -> begin match gif_state.buffer.pixels with
-                     | RGBA (_,_,_,aa) -> Pixmap.set aa (left+x) (top+y) 0xff
+                     | RGBA (_,_,_,aa) ->
+                       Pixmap.set aa (left+x) (top+y) 0x00
                      | _ -> failwith "gif_state.buffer.pixels is not rgba"
                    end
-                 | _ ->
-                   Image.write_rgb gif_state.buffer (left+x) (top+y) r g b)
+                 | a ->
+                   Image.write_rgba gif_state.buffer (left+x) (top+y) r g b a)
           done
         done ;
         Some gif_state.buffer, gif_state.display_time, Some gif_state

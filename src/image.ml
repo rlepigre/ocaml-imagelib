@@ -430,7 +430,7 @@ end = struct
   let [@inline] get_rgba o_x o_y gamma (image:image) : float array =
     let x = clamp o_x 0 (image.width -1) in
     let y = clamp o_y 0 (image.height -1) in
-    let colors = try read_rgb image x y (fun r g b -> [| r;g;b |]) with
+    let colors = try read_rgba image x y (fun r g b a -> [| r;g;b;a |]) with
       | Invalid_argument _ ->
         Printf.eprintf "x:%d[%d] y:%d[%d]" x y image.width image.height ;
         failwith ("read_rgb failed: " ^ __LOC__)
@@ -502,27 +502,24 @@ end = struct
     let p3 = cubic_spline_fit xfrac s3.(3) s3.(7) s3.(11) s3.(15) in
 
     let alphasum = cubic_spline_fit yfrac p0 p1 p2 p3 in
-    assert (alphasum > 0.0) ;
-    let pixel = Array.make 4 0.0 in
-    for b = 0 to 2 do
-      let p0 = cubic_spline_fit
-          xfrac (s0.(0 + b)  *. s0.( 3)) (s0.( 4 + b)  *. s0.( 7))
-          (s0.(8 + b)  *. s0.(11))     (s0.(12 + b) *. s0.(15)) in
-      let p1 = cubic_spline_fit xfrac
-          (s1.(0 + b) *. s1.( 3)) (s1.( 4 + b) *. s1.(7))
-          (s1.(8 + b) *. s1.(11)) (s1.(12 + b) *. s1.(15)) in
-      let p2 = cubic_spline_fit
-          xfrac
-          (s2.(0 + b) *. s2.( 3)) (s2.( 4 + b) *. s2.(7))
-          (s2.(8 + b) *. s2.(11)) (s2.(12 + b) *. s2.(15)) in
-      let p3 = cubic_spline_fit xfrac
-          (s3.(0 + b) *. s3.( 3)) (s3.( 4 + b) *. s3.(7))
-          (s3.(8 + b) *. s3.(11)) (s3.(12 + b) *. s3.(15)) in
-      let sum = cubic_spline_fit yfrac p0 p1 p2 p3 /. alphasum in
-      pixel.(b) <- clamp sum 0. 255. ;
-    done ;
-    pixel.(3) <- clamp alphasum 0. 255. ;
-    pixel
+    (* alphasum goes from 0.0 to 1.0, it may be NaN *)
+    Array.init 4 (fun b -> (* expression forms a rgba8888 array *)
+        let p0 = cubic_spline_fit
+            xfrac (s0.(0 + b)  *. s0.( 3)) (s0.( 4 + b)  *. s0.( 7))
+            (s0.(8 + b)  *. s0.(11))     (s0.(12 + b) *. s0.(15)) in
+        let p1 = cubic_spline_fit xfrac
+            (s1.(0 + b) *. s1.( 3)) (s1.( 4 + b) *. s1.(7))
+            (s1.(8 + b) *. s1.(11)) (s1.(12 + b) *. s1.(15)) in
+        let p2 = cubic_spline_fit
+            xfrac
+            (s2.(0 + b) *. s2.( 3)) (s2.( 4 + b) *. s2.(7))
+            (s2.(8 + b) *. s2.(11)) (s2.(12 + b) *. s2.(15)) in
+        let p3 = cubic_spline_fit xfrac
+            (s3.(0 + b) *. s3.( 3)) (s3.( 4 + b) *. s3.(7))
+            (s3.(8 + b) *. s3.(11)) (s3.(12 + b) *. s3.(15)) in
+        let sum = cubic_spline_fit yfrac p0 p1 p2 p3 /. alphasum in
+        clamp sum 0. 255.
+      )
 
 
   let linear2exp linear gamma =
