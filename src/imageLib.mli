@@ -19,11 +19,13 @@
 open Image
 open ImageUtil
 
-(* Note: This module is an interface to the pure OCaml implementations of
+(** Note: This module is an interface to the pure OCaml implementations of
    various image formats.
 
-   For an easy to use file-based interface, see the [imagelib-unix]
-   OPAM package.
+   For an easy to use file-based interface, see the [imagelib.unix] findlib
+   package distributed with [imagelib].
+   You find said interface in [src/imageLib_unix.mli] or in the
+   documentation for the module {!ImageLib_unix}.
 
    [ImageLib_unix] will fall back to using [imagemagick's convert] utility
    to accomodate the manipulation of file formats that are not well supported
