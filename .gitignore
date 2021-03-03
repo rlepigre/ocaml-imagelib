@@ -4,6 +4,5 @@
 .#*
 .*.swp
 _build
-imagelib-unix.install
 imagelib.install
 _opam
