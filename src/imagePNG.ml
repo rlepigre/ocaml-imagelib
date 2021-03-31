@@ -75,7 +75,7 @@ end = struct
     let flush src len =
       for i = 0 to len - 1 do Buffer.add_char b (unsafe_get src i) done in
 
-    match Zl.Higher.uncompress ~allocate:(fun bits -> De.make_window ~bits) ~i ~o ~refill ~flush with
+    match Zl.Higher.uncompress ~allocate:(fun bits -> De.make_window ~bits) ~refill ~flush i o with
     | Ok _metadata -> Buffer.contents b
     | Error (`Msg err) -> raise (Corrupted_image ("PNG.Zlib:" ^ err))
 
@@ -83,7 +83,7 @@ end = struct
     let open Bigarray.Array1 in
     let i = create Bigarray.char Bigarray.c_layout Zl.io_buffer_size in
     let o = create Bigarray.char Bigarray.c_layout Zl.io_buffer_size in
-    let w = De.make_window ~bits:15 in
+    let w = De.Lz77.make_window ~bits:15 in
     let q = De.Queue.create 0x1000 in
     let b = Buffer.create 0x1000 in
     let p = ref 0 in
@@ -96,7 +96,7 @@ end = struct
     let flush src len =
       for i = 0 to len - 1 do Buffer.add_char b (unsafe_get src i) done in
 
-    Zl.Higher.compress ~level:2 ~w ~q ~i ~o ~refill ~flush ;
+    Zl.Higher.compress ~level:2 ~w ~q ~refill ~flush i o ;
     Buffer.contents b
 end
 
