@@ -71,7 +71,7 @@ end = struct
 
     let refill dst =
       let len = min (dim dst) (String.length input_ro - !p) in
-      blit_from_string input_ro !p dst 0 len ; len in
+      blit_from_string input_ro !p dst 0 len ; p := !p + len ; len in
     let flush src len =
       for i = 0 to len - 1 do Buffer.add_char b (unsafe_get src i) done in
 
