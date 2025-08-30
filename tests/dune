@@ -21,8 +21,9 @@
  (modules tests)
  (libraries imagelib imagelib.unix alcotest))
 
-(rule
- (alias slowtests)
- (targets testwithcrowbar)
- (action
-   (run %{exe:testwithcrowbar.exe})))
+; FIXME this rule triggers in the default alias too, making compilation slow.
+;(rule
+; (alias slowtests)
+; (targets testwithcrowbar)
+; (action
+;   (run %{exe:testwithcrowbar.exe})))

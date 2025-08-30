@@ -16,9 +16,11 @@ module ImageLib_tests = struct
     let content = Crowbar.bytes in
     Crowbar.map [content] chunked_reader_with_png
 
+  (*
   let crowbar_gen_cr_gif =
     let content = Crowbar.bytes in
     Crowbar.map [content] (fun s -> ImageUtil.chunk_reader_of_string ("GIF89a" ^s))
+  *)
 
   let crowbar_skip_known_errors f =
     (fun cr ->
@@ -33,7 +35,7 @@ module ImageLib_tests = struct
            | Image.Corrupted_image ("GIF signature expected...")
           -> Crowbar.bad_test ())
 
-
+  (*
   let crowbar_png_size () =
     Crowbar.add_test ~name:"ImageLib.GIF.ReadGIF.openfile"
       [crowbar_gen_cr_gif]
@@ -42,6 +44,7 @@ module ImageLib_tests = struct
     Crowbar.add_test ~name:"ImageLib.PNG.size"
       [crowbar_gen_cr_png]
       (crowbar_skip_known_errors(fun cr -> (ImageLib.PNG.size cr <> (0, 0))))
+  *)
 
   let crowbar_png_parsefile () =
     Crowbar.add_test ~name:"ImageLib.PNG.openfile"

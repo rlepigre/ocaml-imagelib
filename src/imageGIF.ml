@@ -39,6 +39,7 @@ type gif_header_data = {
   bg_color_index     : int ;
   pix_aspect_ratio   : int
 }
+[@@warning "-69"]
 
 type decoder_state =
   {
@@ -262,6 +263,7 @@ end = struct
     lzw_code_size : int ; (* current *)
     decoder : decoder_state ;
   }
+  [@@warning "-69"]
 
   type read_state =
     { header : gif_header_data ;

@@ -1,8 +1,2 @@
-*.merlin
-*~
-*#
-.#*
-.*.swp
-_build
-imagelib.install
-_opam
+_build/
+_opam/
