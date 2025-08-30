@@ -1,11 +1,3 @@
-(* redundant: imagelib.GIF.write *)
-module ImageLib_tests = struct
-
-  let chunked_reader_with_png s =
-    ImageUtil.chunk_reader_of_string @@ ImagePNG.png_signature ^ s
-
-end
-
 module ImageLib_PNG_tests = struct
   let cr_as = ImageUtil.chunk_reader_of_string
 

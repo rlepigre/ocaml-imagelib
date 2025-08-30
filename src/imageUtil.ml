@@ -37,7 +37,7 @@ let chunk_write_char och ch =
    so currying [chunk_printf och] will fix the number and types of arguments.*)
 let chunk_printf : 'x. chunk_writer ->
   ('x, unit, string, unit) format4 -> 'x = fun och ->
-  Printf.kprintf (chunk_write och)
+  Printf.ksprintf (chunk_write och)
 
 let chunk_writer_of_buffer (buf:Buffer.t) =
   function
