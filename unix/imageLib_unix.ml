@@ -23,7 +23,7 @@ let rm fn =
   Sys.remove fn
 
 let size fn =
-  let extension = (get_extension' fn) in
+  let extension = Filename.extension fn in
   let ich = chunk_reader_of_path fn in
   try ImageLib.size ~extension ich with
   | Image.Not_yet_implemented _ ->
@@ -37,7 +37,7 @@ let size fn =
     end
 
 let openfile fn : image =
-  let extension = (get_extension' fn) in
+  let extension = Filename.extension fn in
   let ich = chunk_reader_of_path fn in
   let fallback () =
     (* This will run imagemagick's "convert" utility to
@@ -59,7 +59,7 @@ let openfile fn : image =
   | Image.Not_yet_implemented _ -> fallback ()
 
 let writefile fn i =
-  let extension = get_extension' fn in
+  let extension = Filename.extension fn in
   let och = ImageUtil_unix.chunk_writer_of_path fn in
   let fallback () =
     (* This will run the PNG writer, then use

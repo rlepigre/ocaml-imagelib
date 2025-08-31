@@ -23,12 +23,12 @@ open Image
 module ReadPPM : ReadImage = struct
   (*
    * The list of standard extenisons for the PPM format.
-   *   - ppm : portable pixmap format
-   *   - pgm : portable graymap format
-   *   - pbm : portable bitmap format
-   *   - pnm : portable anymap format
+   *   - .ppm: portable pixmap format
+   *   - .pgm: portable graymap format
+   *   - .pbm: portable bitmap format
+   *   - .pnm: portable anymap format
    *)
-  let extensions = ["ppm"; "pgm"; "pbm"; "pnm"]
+  let extensions = [".ppm"; ".pgm"; ".pbm"; ".pnm"]
 
   let read_header (content:chunk_reader) =
     let magic = ref "" in

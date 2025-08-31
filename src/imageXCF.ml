@@ -29,7 +29,7 @@ type xcf_header_data = {
 }
 
 module ReadXCF : ReadImage = struct
-  let extensions = ["xcf"]
+  let extensions = [".xcf"]
 
   let version_num s =
     match s with

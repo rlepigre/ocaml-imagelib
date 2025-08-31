@@ -21,7 +21,7 @@ open ImageUtil
 open Image
 
 module ReadJPG : ReadImage = struct
-  let extensions = ["jpg"; "jpeg"; "jpe"; "jif"; "jfif"; "jfi"]
+  let extensions = [".jpg"; ".jpeg"; ".jpe"; ".jif"; ".jfif"; ".jfi"]
 
   let read_marker ich =
     let ff = chunk_byte ich in

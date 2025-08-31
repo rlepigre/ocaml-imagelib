@@ -118,7 +118,7 @@ module ReadGIF : sig
   include ReadImage
   include ReadImageStreaming
 end = struct
-  let extensions = ["gif"]
+  let extensions = [".gif"]
 
   let [@inline always] uint16le ?(off=0) buf =
     ((int_of_char buf.[off+1]) lsl 8) lor (int_of_char buf.[off])

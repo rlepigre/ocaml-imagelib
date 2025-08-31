@@ -17,7 +17,7 @@ let _ =
   in
   let img =
     let ic = ImageUtil_unix.chunk_reader_of_path input_path in
-    let extension = ImageUtil_unix.get_extension' input_path in
+    let extension = Filename.extension input_path in
     handle_exception (fun ic -> ImageLib.openfile ~extension ic) ic
   in
   handle_exception (fun img -> ImageLib_unix.writefile output_path img) img

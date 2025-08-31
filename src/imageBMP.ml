@@ -383,7 +383,7 @@ module BitmapMetaData = struct
 end
 
 module ReadBMP : ReadImage = struct
-  let extensions = ["bmp"; "dib"]
+  let extensions = [".bmp"; ".dib"]
 
   let size (ich:chunk_reader) =
     let meta_res = BitmapMetaData.read ich in

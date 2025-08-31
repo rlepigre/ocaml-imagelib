@@ -136,7 +136,7 @@ open PNG_CRC
  * Core PNG function                                                        *
  ****************************************************************************)
 module ReadPNG : ReadImage = struct
-  let extensions = ["png"]
+  let extensions = [".png"]
 
   (* Checks for the PNG signature
    * Arguments:
