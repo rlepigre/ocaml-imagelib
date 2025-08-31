@@ -1274,8 +1274,18 @@ let output_png img (och:chunk_writer) =
             add_byte (a land mask));
         done
       done
-    | _ -> if (!debug) then Printf.fprintf stderr "bd: %i\n%!" bd;
-      raise (Corrupted_image "PNG: img.pixels * bd (bitdepth) mismatch")
+    | Grey _  , _  ->
+        raise (Corrupted_image (Printf.sprintf "cannot write greyscale image \
+          to PNG with bitdepth of %i" bd))
+    | GreyA _ , _  ->
+        raise (Corrupted_image (Printf.sprintf "cannot write greyscale image \
+          with alpha to PNG with bitdepth of %i" bd))
+    | RGB _   , _  ->
+        raise (Corrupted_image (Printf.sprintf "cannot write RGB image to \
+          PNG with bitdepth of %i" bd))
+    | RGBA _  , _  ->
+        raise (Corrupted_image (Printf.sprintf "cannot write RGB image with \
+          alpha to PNG with bitdepth of %i" bd))
   );
   let data = Buffer.contents buf in
   let data = compress_string data in
