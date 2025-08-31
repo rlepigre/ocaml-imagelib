@@ -41,7 +41,6 @@ depends: [
   "dune" {>= "3.14"}
   "ocaml" {>= "4.14.0"}
   "decompress" {>= "1.5.3"}
-  "conf-libMagickCore" {with-test}
   "alcotest" {with-test}
   "crowbar" {with-test}
   "afl-persistent" {with-test}

@@ -21,6 +21,7 @@ jobs:
           ocaml-compiler: ${{ matrix.ocaml-version }}
           opam-disable-sandboxing: true
           cache-prefix: ocaml-${{ matrix.ocaml-version }}
+      - run: sudo apt-get install imagemagick
       - run: opam install . --deps-only --with-test
       - run: opam exec -- dune build
       - run: opam exec -- dune runtest
