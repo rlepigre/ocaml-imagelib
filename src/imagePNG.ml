@@ -330,8 +330,8 @@ module ReadPNG : ReadImage = struct
     let input_bit = ref 0 in
 
     let read_byte () =
-      if !input_bit = 0 then
-        raise (Corrupted_image "PNG extract_pass: input_bit is 0") ;
+      if !input_bit <> 0 then
+        raise (Corrupted_image "PNG extract_pass: input_bit is not 0");
       let c = String.get s !input_byte in
       incr input_byte; int_of_char c
     in
