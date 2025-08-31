@@ -1,0 +1,23 @@
+  $ ../test.sh *.png
+  Testing f00n0g08.png
+  0 (0)
+  Testing f00n2c08.png
+  0 (0)
+  Testing f01n0g08.png
+  0 (0)
+  Testing f01n2c08.png
+  0 (0)
+  Testing f02n0g08.png
+  0 (0)
+  Testing f02n2c08.png
+  0 (0)
+  Testing f03n0g08.png
+  0 (0)
+  Testing f03n2c08.png
+  0 (0)
+  Testing f04n0g08.png
+  0 (0)
+  Testing f04n2c08.png
+  0 (0)
+  Testing f99n0g04.png
+  0 (0)
