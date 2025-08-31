@@ -1,0 +1,31 @@
+  $ ../test.sh *.png
+  Testing basi0g01.png
+  0
+  Testing basi0g02.png
+  0
+  Testing basi0g04.png
+  0
+  Testing basi0g08.png
+  0
+  Testing basi0g16.png
+  0
+  Testing basi2c08.png
+  0
+  Testing basi2c16.png
+  0
+  Testing basi3p01.png
+  0
+  Testing basi3p02.png
+  0
+  Testing basi3p04.png
+  0
+  Testing basi3p08.png
+  0
+  Testing basi4a08.png
+  0
+  Testing basi4a16.png
+  0
+  Testing basi6a08.png
+  0
+  Testing basi6a16.png
+  0
