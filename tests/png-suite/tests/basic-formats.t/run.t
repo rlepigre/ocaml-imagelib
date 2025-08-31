@@ -1,31 +1,31 @@
   $ ../test.sh *.png
   Testing basn0g01.png
-  0 (0)
+  0
   Testing basn0g02.png
-  0 (0)
+  0
   Testing basn0g04.png
-  0 (0)
+  0
   Testing basn0g08.png
-  0 (0)
+  0
   Testing basn0g16.png
-  0 (0)
+  0
   Testing basn2c08.png
-  0 (0)
+  0
   Testing basn2c16.png
-  0 (0)
+  0
   Testing basn3p01.png
-  0 (0)
+  0
   Testing basn3p02.png
-  0 (0)
+  0
   Testing basn3p04.png
-  0 (0)
+  0
   Testing basn3p08.png
-  0 (0)
+  0
   Testing basn4a08.png
-  0 (0)
+  0
   Testing basn4a16.png
-  0 (0)
+  0
   Testing basn6a08.png
-  0 (0)
+  0
   Testing basn6a16.png
-  0 (0)
+  0
