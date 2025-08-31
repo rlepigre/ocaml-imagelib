@@ -326,6 +326,26 @@ module ReadPNG : ReadImage = struct
     let zchar = char_of_int 0 in
     let output = Array.init h (fun _ -> Bytes.make rowsize zchar) in
 
+    let read_pix str pixnum =
+      match pl_bit mod 8 with
+      | 0 ->
+          let bpp = pl_bit / 8 in
+          String.sub str (pixnum * bpp) bpp
+      | _ ->
+          let bitoffset = pl_bit * pixnum in
+          let byteoffset = bitoffset / 8 in
+          let byte =
+            match byteoffset >= String.length str with
+            | false -> int_of_char str.[byteoffset]
+            | true  ->
+            raise (Corrupted_image "PNG extract_pass: bitoffset out of bound")
+          in
+          let bitpos = bitoffset mod 8 in
+          let mask = (ones pl_bit) lsl (8 - pl_bit) in
+          let pix = (byte lsl bitpos) land mask in
+          String.make 1 (char_of_int pix)
+    in
+
     let input_byte = ref 0 in
     let input_bit = ref 0 in
 
@@ -336,73 +356,46 @@ module ReadPNG : ReadImage = struct
       incr input_byte; int_of_char c
     in
 
-    let read_pix str pixnum =
-      if pl_bit mod 8 = 0
-      then begin
-        let bpp = pl_bit / 8 in
-        let offset = pixnum * bpp in
-        String.sub str offset bpp
-      end else begin
-        let bitoffset = pl_bit * pixnum in
-        let byte =
-          if bitoffset / 8 >= (String.length str) then begin
-            if (!debug) then
-              Printf.eprintf "Warning: read_pix: bitoffset out of bound..." ;
-              255
-          end else int_of_char str.[bitoffset / 8]
-        in
-        let bitpos = bitoffset mod 8 in
-        let mask = (ones pl_bit) lsl (8 - pl_bit) in
-        let pix = (byte lsl bitpos) land mask in
-        let res = String.make 1 (char_of_int pix) in
-        res
-      end
-    in
-
     let read_pixel () =
-      if pl_bit mod 8 = 0
-      then begin
-        let bpp = pl_bit / 8 in
-        let res = String.sub s !input_byte bpp in
-        input_byte := !input_byte + bpp; res
-      end else begin
-        let byte = int_of_char s.[!input_byte] in
-        let mask = (ones pl_bit) lsl (8 - pl_bit) in
-        let pix = (byte lsl !input_bit) land mask in
-        input_bit := !input_bit + pl_bit;
-        if !input_bit > 7 then begin
-          input_bit := 0;
-          incr input_byte
-        end;
-        String.make 1 (char_of_int pix)
-      end
+      match pl_bit mod 8 with
+      | 0 ->
+          let bpp = pl_bit / 8 in
+          let res = String.sub s !input_byte bpp in
+          input_byte := !input_byte + bpp; res
+      | _ ->
+          let byte = int_of_char s.[!input_byte] in
+          let mask = (ones pl_bit) lsl (8 - pl_bit) in
+          let pix = (byte lsl !input_bit) land mask in
+          input_bit := !input_bit + pl_bit;
+          if !input_bit > 7 then begin
+            input_bit := 0;
+            incr input_byte
+          end;
+          String.make 1 (char_of_int pix)
     in
 
     let flush_end_of_byte () =
-      if !input_bit <> 0
-      then begin
-        input_bit := 0;
-        incr input_byte
-      end
+      match !input_bit with
+      | 0 -> ()
+      | _ -> input_bit := 0; incr input_byte
     in
 
     (* Writes the pixel pix at pixel position pos in the `bytes` str. *)
     let output_pixel pix pos str =
-      if pl_bit mod 8 = 0
-      then begin
-        let bpp = pl_bit / 8 in
-        let offset = pos * bpp in
-        String.blit pix 0 str offset bpp
-      end else begin
-        let pixv = int_of_char pix.[0] in
-        let bitpos = pos * pl_bit in
-        let byte = bitpos / 8 in
-        let bit = bitpos mod 8 in
-        let content = int_of_char @@ Bytes.get str byte in
-        let mask = lnot (((ones pl_bit) lsl (8 - pl_bit)) lsr bit) in
-        let newcontent = (content land mask) lor (pixv lsr bit) in
-        Bytes.set str byte (char_of_int newcontent)
-      end
+      match pl_bit mod 8 with
+      | 0 ->
+          let bpp = pl_bit / 8 in
+          let offset = pos * bpp in
+          String.blit pix 0 str offset bpp
+      | _ ->
+          let pixv = int_of_char pix.[0] in
+          let bitpos = pos * pl_bit in
+          let byte = bitpos / 8 in
+          let bit = bitpos mod 8 in
+          let content = int_of_char @@ Bytes.get str byte in
+          let mask = lnot (((ones pl_bit) lsl (8 - pl_bit)) lsr bit) in
+          let newcontent = (content land mask) lor (pixv lsr bit) in
+          Bytes.set str byte (char_of_int newcontent)
     in
 
     let sl = Bytes.make (w * 8) zchar in (* ugly... (2bytes x 4 component) *)
@@ -418,6 +411,7 @@ module ReadPNG : ReadImage = struct
         slpos := 0;
         let col = ref starting_col.(pass) in
         while !col < w do
+          (* Read the filter type. *)
           if !ft < 0 then ft := read_byte ();
 
           let pix = read_pixel () in
