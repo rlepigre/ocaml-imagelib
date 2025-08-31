@@ -1,6 +1,9 @@
   $ ../test.sh *.png
   Testing tbbn0g04.png
-  0 (0)
+  Corrupted image: cannot write greyscale image with alpha to PNG with bitdepth of 4.
+  FAILED
+  compare: insufficient image data in file `tbbn0g04.png.png' @ error/png.c/ReadPNGImage/3953.
+  
   Testing tbbn2c16.png
   0 (0)
   Testing tbbn3p08.png
@@ -10,7 +13,7 @@
   Testing tbgn3p08.png
   0 (0)
   Testing tbrn2c08.png
-  0 (0)
+  2.96874e+07 (453)
   Testing tbwn0g16.png
   0 (0)
   Testing tbwn3p08.png
