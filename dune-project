@@ -45,6 +45,7 @@ and otherwise it will be in `_build/default/app/imagetool.exe`")
  (depends
   (ocaml (>= 4.14.0))
   (decompress (>= 1.5.3))
+  (conf-libMagickCore :with-test)
   (alcotest :with-test)
   (crowbar :with-test)
   (afl-persistent :with-test)))
