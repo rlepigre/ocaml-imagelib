@@ -3,4 +3,4 @@
  (public_name imagelib)
  (synopsis "Image library")
  (wrapped false)
- (libraries stdlib-shims bigarray checkseum.ocaml decompress.zl))
+ (libraries stdlib-shims unix bigarray checkseum.ocaml decompress.zl))
