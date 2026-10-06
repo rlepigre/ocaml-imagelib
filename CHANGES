@@ -1,3 +1,26 @@
+## Unreleased
+
+- Skip the two full-size copies chroma upsampling used to make when nothing
+  needs upsampling, which is every component of a 4:4:4 image. This was 38% of
+  decode time; see JPEG-PERFORMANCE.md for measurements and for what
+  dominates the rest.
+- Fix the GIF decoder. An image descriptor's local colour table was being
+  read *after* the LZW minimum code size, so any frame that carried a local
+  colour table was decoded from the wrong offset; this made every frame but
+  the first of most animations fail. Interlaced images are now decoded
+  instead of being refused, disposal method 3 (restore to previous) is
+  implemented instead of being reported as an invalid bit pattern, comment
+  and plain text extensions are skipped rather than refused, and a stray
+  debug print has been removed from the disposal handling.
+- Add a pure OCaml JPEG codec: baseline sequential and progressive DCT
+  decoding (8-bit samples, arbitrary chroma subsampling, restart intervals)
+  and baseline sequential encoding.  JPEG is now handled natively by
+  `ImageLib`, so the `imagemagick` fallback is no longer used for it.
+- `ImageLib` now accepts the format extension with or without a leading dot
+  (and in any case). Previously a bare extension such as `"png"` raised
+  `Not_yet_implemented` because dispatch matched the dotted forms only; this
+  is what made the newly-added JPEG path look as if it broke PNG.
+
 ## ocaml-imagelib_20210511
 
 - Fix inflate of PNG images

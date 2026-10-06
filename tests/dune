@@ -16,10 +16,20 @@
  (modules testwithcrowbar)
  (libraries imagelib imagelib.unix alcotest crowbar))
 
-(test
+(executable
  (name tests)
  (modules tests)
  (libraries imagelib imagelib.unix alcotest))
+
+; The JPEG and GIF tests read fixtures encoded by libjpeg and libgif, together
+; with their reference decodes, so both directories have to be available next to
+; the test.  The action is spelled out because dune's implicit [test] action
+; cannot carry [deps].
+(rule
+ (alias runtest)
+ (deps (source_tree jpg) (source_tree gif))
+ (action
+  (run %{exe:tests.exe})))
 
 ; FIXME this rule triggers in the default alias too, making compilation slow.
 ;(rule

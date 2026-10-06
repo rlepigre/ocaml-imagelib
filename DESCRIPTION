@@ -6,8 +6,16 @@ OCaml, relying on only one external dependency: 'decompress'.
 Supported image formats:
  - PNG (full implementation of RFC 2083),
  - PPM, PGM, PBM, ... (fully supported),
- - JPG (only image size natively, conversion to PNG otherwise),
- - GIF (only image size natively, conversion to PNG otherwise),
+ - JPEG (read and write),
+    - Baseline sequential and progressive DCT decoding, 8-bit samples,
+      arbitrary chroma subsampling and restart intervals.  Writing produces
+      baseline sequential images.  Arithmetic coding, lossless modes, 12-bit
+      samples and CMYK are not supported.
+ - GIF (read-only, animated),
+    - There is an experimental native implementation available in the pure `ImageLib` module, which now
+      handles interlaced images, local colour tables, the disposal methods 0 to 3 and comment extensions.
+      `imagelib.unix` still prefers `imagemagick` for GIF, to avoid changing the behaviour
+      existing applications depend on.
  - XCF (only image size natively, conversion to PNG otherwise),
  - Other formats rely on 'convert' (imagemagick).
 

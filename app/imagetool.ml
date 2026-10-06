@@ -132,9 +132,11 @@ let arg_parser array : config =
 
 let () =
   let config = arg_parser Sys.argv in
+  (* [Filename.extension] returns the extension with its leading dot, which is
+     the form the [ImageLib] format lists use. *)
   let extension filename =
     let ri =
-      try 1 (* the . itself *) + String.rindex filename '.'
+      try String.rindex filename '.'
       with Not_found -> invalid_arg "filename without extension"
     in
     String.(sub filename ri @@ (length filename) - ri)
@@ -226,8 +228,12 @@ let () =
             | exception _ -> fn
             | parts -> String.concat (string_of_int frame_number) parts in
           output_this fn image ;
-        loop (succ frame_number) (read_next state)
-      | None , _, _ -> exit 0
+        (* A None state means there are no further frames; re-reading would
+           run the reader past the end of the image. *)
+        (match state with
+         | None -> ()
+         | Some next -> loop (succ frame_number) (read_next (Some next)))
+      | None , _, _ -> ()
     in
     loop 1 (read_next None)
 

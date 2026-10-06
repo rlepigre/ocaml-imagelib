@@ -14,18 +14,29 @@ Supported image formats:
  - PNG (full implementation of RFC 2083),
  - PPM, PGM, PBM, ... (fully supported),
  - BMP (read-only)
- - JPG (only image size natively),
- - GIF (only image size natively),
-    - There is an experimental native implementation available in the pure `ImageLib` module.
+ - JPEG (read and write),
+    - Baseline sequential and progressive DCT decoding, 8-bit samples,
+      arbitrary chroma subsampling and restart intervals.  Writing produces
+      baseline sequential images.  Arithmetic coding, lossless modes, 12-bit
+      samples and CMYK are not supported.
+ - GIF (read-only, animated),
+    - There is an experimental native implementation available in the pure `ImageLib` module, which now
+      handles interlaced images, local colour tables, the disposal methods 0 to 3 and comment extensions.
+      `imagelib.unix` still prefers `imagemagick` for GIF, to avoid changing the behaviour
+      existing applications depend on.
  - XCF (only image size natively),
  - Utility functions for handling unimplemented formats are available in
    the 'imagelib.unix' findlib package and handle conversion from unsupported
-   image formats like JPG, GIF, XCF by converting them to PNG using the
+   image formats like GIF, XCF by converting them to PNG using the
    `convert` commandline utility from `imagemagick`.
 
 As imagelib only requires `decompress`, it is suitable (excluding operations
 requiring the `imagemagick` `convert` binary) for compilation to javascript
 using `js_of_ocaml`, or inclusion in MirageOS unikernels.
+
+The JPEG codec is pure OCaml and currently slower than `imagemagick` and
+libjpeg; see [JPEG-PERFORMANCE.md](JPEG-PERFORMANCE.md) for measurements, a
+breakdown of where the time goes, and what could be done about it.
 
 Dependencies
 ------------

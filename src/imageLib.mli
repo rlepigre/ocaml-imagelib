@@ -45,23 +45,32 @@ open ImageUtil
    to convert to PNG if the file extension is unknown.
 *)
 val size : extension:string -> ImageUtil.chunk_reader -> int * int
+(** [size ~extension:ext ich] uses [ext] to select the image format.
+    The leading dot is optional: [".png"] and ["png"] (in any case) are
+    equivalent. *)
 
 (* [openfile fn] reads the image in the file [fn]. This function guesses the
    image format using the extension, and raises [{!Corrupted_image} msg] in
    case of problem.
 *)
 val openfile : extension:string -> ImageUtil.chunk_reader -> Image.image
+(** [openfile ~extension:ext ich] uses [ext] to select the image format.
+    The leading dot is optional: [".png"] and ["png"] (in any case) are
+    equivalent. *)
 
 val openfile_streaming : extension:string -> ImageUtil.chunk_reader ->
   [`GIF of ImageGIF.read_state] option ->
   image option * int * [`GIF of ImageGIF.read_state] option
 (** see {!ReadImageStreaming.read_streaming} *)
 
-(* [writefile extension och img] writes the image [img] to the chunk reader [och]. 
+(* [writefile extension och img] writes the image [img] to the chunk reader [och].
    The desired format is specified via [extension].
 *)
 val writefile : extension:string ->
   ImageUtil.chunk_writer -> Image.image -> unit
+(** [writefile ~extension:ext och img] uses [ext] to select the image format.
+    The leading dot is optional: [".png"] and ["png"] (in any case) are
+    equivalent. *)
 
 module PPM :
   sig
@@ -91,7 +100,26 @@ module PNG :
 
 module JPG :
   sig
-    module ReadJPG : ReadImage
+    include ReadImage
+    include WriteImage
+
+    type subsampling = ImageJPG.subsampling
+      = Four_four_four | Four_two_two | Four_two_zero
+
+    val write_jpg : ?quality:int -> ?subsampling:subsampling ->
+      chunk_writer -> image -> unit
+    (** [write_jpg ?quality ?subsampling cw image] encodes [image] as a
+        baseline sequential 8-bit JPEG and writes it to [cw].  [quality] ranges
+        from 1 to 100 and scales the example quantisation tables the way
+        libjpeg does; it defaults to 75.  [subsampling] selects the chroma
+        resolution and defaults to [Four_four_four], i.e. no chroma
+        subsampling.  Any alpha channel is ignored, and images whose
+        [max_val] exceeds 255 are scaled down to the 8-bit range. *)
+
+    val bytes_of_jpg : ?quality:int -> ?subsampling:subsampling ->
+      image -> Bytes.t
+    (** [bytes_of_jpg ?quality ?subsampling image] is [write_jpg] into an
+        in-memory buffer. *)
   end
 
 module GIF :

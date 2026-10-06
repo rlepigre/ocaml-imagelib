@@ -270,17 +270,41 @@ end = struct
       gct : string option ; (* global color table *)
       compression_dict : Dict.instance option ;
       buffer : image ; (* needs to be copied if image is returned *)
+      (* Snapshot of [buffer] taken just before the frame being decoded was
+         composited onto it; this is what the "restore to previous" disposal
+         method reverts to. *)
+      restore_point : image option ;
       (* ancillary state parsed from various extensions etc: *)
       transparency_index : int;
       display_time : int; (* hundreds of a second; 0 means "forever" *)
     }
 
+  (* An interlaced GIF stores its pixels in four passes over the rows rather
+     than top to bottom, so the row counter the decoder maintains is not the
+     row the pixel belongs to.  This table maps a sequential row index onto
+     the row it addresses.  An empty array means the image is not interlaced
+     and the index is then used as is. *)
+  let interlace_rows height =
+    let rows = Array.make height 0 in
+    let seq = ref 0 in
+    List.iter
+      (fun (first, step) ->
+         let r = ref first in
+         while !r < height && !seq < height do
+           rows.(!seq) <- !r ;
+           incr seq ;
+           r := !r + step
+         done)
+      [ (0, 8) ; (4, 8) ; (2, 4) ; (1, 2) ] ;
+    rows
+
   let process_image_descriptor_subblock ~transparency_index
       ~color_table ~color_table_size
-      ~image ~lzw_min_size original_state subblock =
+      ~image ~lzw_min_size ~interlace original_state subblock =
     let clear_code = calc_clear_code lzw_min_size in
     let eoi_code = clear_code + 1 in
     let used_coord = ref false in (* keep track of emitted pixels to make sure we don't overwrite, and that we emit a symbol for each pixel *)
+    let rowmap = if interlace then interlace_rows image.height else [||] in
     let [@inline always] next_coord ({x=old_x ; y = old_y; _ } as state) =
       assert (!used_coord);
       let x, y =
@@ -306,6 +330,13 @@ end = struct
     let [@inline always] emit_pixel image x y symbol =
       assert (symbol <> clear_code);
       assert (symbol <> eoi_code);
+      (* [y] is the sequential row counter; for an interlaced image it has to
+         be translated into the row the pixel actually belongs to. *)
+      let y =
+        if Array.length rowmap = 0 then y
+        else if y < Array.length rowmap then rowmap.(y)
+        else y
+      in
       if (!used_coord) then begin
         invalid_arg @@ Printf.sprintf "EMIT  x:%d/%d y:%d/%d sym:%d min:%d\n"
           x image.width y  image.height symbol lzw_min_size
@@ -407,7 +438,10 @@ end = struct
 
   let process_image_descriptor_block (state:read_state) ich =
     let original_compression_dict = state.compression_dict in
-    let block  = get_bytes ich (4+4+1+1) in (* four 16-bit coordinates *)
+    (* An image descriptor is the four 16-bit coordinates and the packed
+       feature byte; the local colour table (when the corresponding flag is
+       set) follows, and only *then* comes the LZW minimum code size. *)
+    let block  = get_bytes ich (4+4+1) in (* four 16-bit coordinates and flags *)
     let left   = uint16le ~off:0 block in
     let top    = uint16le ~off:2 block in     (* 4 : coordinates *)
     let width  = uint16le ~off:4 block in
@@ -415,21 +449,12 @@ end = struct
 
     let flags = Char.code block.[8] in        (* 1 : feature flags *)
     let local_color_table_size = 2 lsl (flags land 0b111) in
-    let lzw_min_size = Char.code block.[9] in (* 1: minimum/root code size  *)
-
-    let lzw_min_size = lzw_min_size + 1 in
-    (*Printf.printf "TODO lzw_min_size %d\n%!" lzw_min_size;*)
-
 
     if let global_width, global_height = state.header.image_size in
       width = 0 || height = 0
       || (left + width > global_width)
       || (top + height > global_height) then
       raise (Corrupted_image "Invalid image descriptor block dimensions");
-
-    if lzw_min_size < 3 || lzw_min_size > 12 then
-      raise (Corrupted_image (Printf.sprintf "Invalid LZW minimum code size %d"
-                                lzw_min_size)) ;
 
     (* feature flags:
        has_local_color_table  = flags & 0x80
@@ -441,11 +466,9 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
     *)
     let implemented_flags =
       0x80 (* local color table *)
+      lor 0x40 (* interlace *)
       lor 0b111 (* color table size *)
     in
-    if (0 <> flags land 0x40) then
-      raise (Not_yet_implemented "GIF interlace feature flag") ;
-
     if 0 <> flags land (lnot implemented_flags) then
       raise (Not_yet_implemented
                "Unsupported ImageDescriptor feature flag(s)") ;
@@ -462,6 +485,13 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
                            "GIF: No global color table, and no local either")
         | Some gct -> gct, 2 lsl state.header.size_glob_col_tbl
     in
+
+    (* The LZW minimum code size is read after the local colour table. *)
+    let lzw_min_size = (Char.code (get_bytes ich 1).[0]) + 1 in
+
+    if lzw_min_size < 3 || lzw_min_size > 12 then
+      raise (Corrupted_image (Printf.sprintf "Invalid LZW minimum code size %d"
+                                lzw_min_size)) ;
 
     let image = create_rgb ~alpha:true ~max_val:255 width height in
     let [@inline always] rec process_subblock acc =
@@ -505,6 +535,7 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
           process_image_descriptor_subblock
             ~transparency_index:state.transparency_index
             ~color_table ~color_table_size ~image ~lzw_min_size
+            ~interlace:(0 <> flags land 0x40)
             descriptor_state subblock in
         process_subblock descriptor_state
     in
@@ -555,6 +586,7 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
           { header; gct; compression_dict = None ;
             (* initialize ancillary state: *)
             transparency_index = -1 ;
+            restore_point = None ;
             display_time = 0;
             buffer ;
           }
@@ -578,8 +610,9 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
         begin match extension_label with
           | 0xf9 -> (* Graphic Control Extension *)
             let len = chunk_byte ich in
-            (* TODO maybe just assert (len = 4) *)
-            assert (len = 4);
+            if len <> 4 then
+              raise (Corrupted_image
+                       (Printf.sprintf "GCE: expected length 4, got %d" len)) ;
             let body = get_bytes ich (len+1) in
             if body.[len] <> '\x00' then
               raise (Corrupted_image "GCE: missing end of block") ;
@@ -608,36 +641,47 @@ https://www.commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art011*)
             (* http://webreference.com/content/studio/disposal.html *)
             let graphics_disposal_method = match (packed lsr 2) land 0b111 with
               | 0 ->
-                ()
-                (*Printf.eprintf "graphic disposal method not specified\n%!"*)
-              (* Use this option to replace one full-size, non-transparent frame with another. *)
-              (* TODO *)
+                ()    (* no disposal specified *)
 
-              | 1 -> (* do not dispose of graphic*)
-                (*Printf.eprintf "DO NOT DISPOSE\n%!";*)
-                fill_alpha gif_state.buffer 0xff;
-              (*  In this option, any pixels not covered up by the next frame continue to display. This is the setting used most often for optimized animations. In the flashing light animation, we wanted to keep the first frame displaying, so the subsequent optimized frames would just replace the part that we wanted to change. That's what Do Not Dispose does. *)
-                ()
+              | 1 ->
+                (* Do not dispose: leave the graphic in place so that the next
+                   frame, if partial, composites over it. *)
+                fill_alpha gif_state.buffer 0xff
 
-              | 2 -> Printf.printf "overwrite graphic with background color\n%!"
-              (* The background color or background tile - rather than a previous frame - shows through transparent pixels. In the GIF specification, you can set a background color. In Netscape, it's the page's background color or background GIF that shows through. *)
-                ;
+              | 2 ->
+                (* Restore to the background colour, which is what shows through
+                   the transparent pixels of the next frame. *)
                 (match gif_state.gct with
                  | None -> (* TODO default to black or fail? *)
-                   fill_background_color gif_state.buffer
-                     "\000\000\000" 0
+                   fill_background_color gif_state.buffer "\000\000\000" 0
                  | Some gct ->
                    fill_background_color gif_state.buffer
                      gct gif_state.header.bg_color_index) ;
 
-              | 4 -> (* overwrite graphic with previous graphic*)
-                Image.fill_alpha gif_state.buffer 0xFF
-              (* TODO unclear if this means that alpha should show *)
-              (* The background color or background tile - rather than a previous frame - shows through transparent pixels. In the GIF specification, you can set a background color. In Netscape, it's the page's background color or background GIF that shows through.
-The thing to remember about Restore to Previous is that it's not necessarily the first frame of the animation that will be restored but the last frame set to Unspecified or Do Not Dispose*)
+              | 3 ->
+                (* Restore to previous: put back the canvas as it was before
+                   the frame that this extension describes.  Note this is not
+                   necessarily the first frame of the animation, but the canvas
+                   as of the last frame disposed of by method 0 or 1. *)
+                (match gif_state.restore_point with
+                 | None -> ()    (* nothing to restore *)
+                 | Some previous ->
+                   (* There is no blit on [image], so copy the pixels across
+                      explicitly. *)
+                   for py = 0 to previous.height - 1 do
+                     for px = 0 to previous.width - 1 do
+                       Image.read_rgba previous px py
+                         (fun r g b a ->
+                            Image.write_rgba gif_state.buffer px py r g b a)
+                     done
+                   done) ;
 
-              | _ -> raise @@ Corrupted_image
-                  ("GIF: Graphics Disposal Method multiple bits set")
+              | _ ->
+                (* 4 to 7 are reserved by the specification. *)
+                raise @@ Corrupted_image
+                  (Printf.sprintf
+                     "GIF: reserved Graphics Disposal Method %d"
+                     ((packed lsr 2) land 0b111))
             in
             let _TODO = user_input_flag, graphics_disposal_method in
             let gif_state = {gif_state with transparency_index ;
@@ -711,13 +755,29 @@ The thing to remember about Restore to Previous is that it's not necessarily the
                      identifier authentcode subblock_len)
             end ;
             parse_blocks gif_state
-          | unknown -> raise @@ Not_yet_implemented
-              (Printf.sprintf "Unknown GIF Extension %#x" unknown)
+
+          (* Any other extension is a sub-block chain of its own that we can
+             simply skip: comment (0xfe), plain text (0x01), and the rarely
+             used proprietary ones.  Skipping is preferable to refusing the
+             file, since they carry no rendering information. *)
+          | _ ->
+            let rec skip () =
+              let n = chunk_byte ich in
+              if n > 0 then begin
+                ignore (get_bytes ich n) ;
+                skip ()
+              end
+            in
+            skip () ;
+            parse_blocks gif_state
         end
 
       | '\x2c' -> (* Image Descriptor*)
         let dict, (image,left,top) = process_image_descriptor_block gif_state ich in
-        (* TODO here we need to read a bit more and determine if we need to copy the buffer or if the next byte is the end marker *)
+        (* Snapshot the canvas before compositing, so that a later "restore to
+           previous" disposal can get back to it. *)
+        let gif_state = {gif_state with
+                         restore_point = Some (Image.copy gif_state.buffer) } in
         let gif_state = {gif_state with
                          compression_dict = Some dict ;
                          buffer = Image.copy gif_state.buffer} in
